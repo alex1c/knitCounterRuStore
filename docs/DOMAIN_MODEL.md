@@ -45,7 +45,7 @@ Key-value persistent settings.
 |--------|------|-------|
 | id | TEXT PK | UUID |
 | project_id | TEXT FK | → knitting_projects, CASCADE |
-| project_part_id | TEXT FK | → project_parts, CASCADE, nullable |
+| project_part_id | TEXT FK | → project_parts in the same project, SET NULL, nullable |
 | name | TEXT | e.g. Основной ряд |
 | current_value | INTEGER | ≥ 0 |
 | start_value | INTEGER | ≥ 0 |
@@ -75,6 +75,7 @@ Foundation for undo/history.
 - `ON DELETE CASCADE` for owned children
 - CHECK constraints on enums, non-negative values, repeat_length > 0
 - Repository-level validation before writes
+- `is_primary` is display metadata; multiple counters may be marked primary.
 
 ## Future Extensions (Not Phase 1)
 

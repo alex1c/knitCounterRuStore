@@ -12,13 +12,22 @@ import type { SqlDatabase } from './types';
 /** On-device SQLite filename (lives in the app's document directory). */
 export const APP_DATABASE_NAME = 'knit_counter.db';
 
+let appDatabase: SqlDatabase | null = null;
+
 /**
  * Opens the app database, enables foreign keys, and applies pending migrations.
  * Safe to call multiple times — migrations no-op when user_version is current.
  */
 export function openAppDatabase(): SqlDatabase {
+  if (appDatabase) {
+    return appDatabase;
+  }
+
   const client = openDatabaseSync(APP_DATABASE_NAME);
-  return createDatabaseFromClient(createExpoSqliteAdapter(client), client);
+  const initialized = createDatabaseFromClient(createExpoSqliteAdapter(client), client);
+  // Cache only a fully bootstrapped connection. A thrown initialization remains retryable.
+  appDatabase = initialized;
+  return initialized;
 }
 
 /**

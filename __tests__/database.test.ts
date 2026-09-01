@@ -9,8 +9,12 @@ import {
   createDatabaseFromClient,
 } from '@/db/database';
 import { CURRENT_SCHEMA_VERSION } from '@/db/migrations';
+import { migration001Initial } from '@/db/migrations/001_initial';
+import { migration002CounterPartIntegrity } from '@/db/migrations/002_counter_part_integrity';
+import { runMigrations } from '@/db/migrate';
 import { createSqlJsAdapter } from '@/db/sqlJsAdapter';
-import type { SqlDatabase } from '@/db/types';
+import type { Migration, SqlDatabase } from '@/db/types';
+import { StorageError } from '@/domain/errors';
 import { DomainValidationError } from '@/domain/validation';
 import { CounterRepository } from '@/repositories/CounterRepository';
 import { ProjectPartRepository } from '@/repositories/ProjectPartRepository';
@@ -53,6 +57,62 @@ describe('database', () => {
         name: 'Перед',
       })
     ).toThrow();
+  });
+
+  test('rejects a database newer than this application supports', async () => {
+    const SQL = await initSqlJs();
+    const db = createSqlJsAdapter(new SQL.Database());
+    db.setUserVersion(CURRENT_SCHEMA_VERSION + 1);
+
+    expect(() => createDatabaseFromClient(db)).toThrow(/newer than supported/);
+    expect(db.getUserVersion()).toBe(CURRENT_SCHEMA_VERSION + 1);
+  });
+
+  test('failed migration rolls back schema and version watermark', async () => {
+    const SQL = await initSqlJs();
+    const db = createSqlJsAdapter(new SQL.Database());
+    const failingMigration: Migration = {
+      version: 1,
+      name: 'controlled_failure',
+      up(target) {
+        target.exec('CREATE TABLE partial_table (id INTEGER PRIMARY KEY);');
+        target.exec('THIS IS NOT VALID SQL;');
+      },
+    };
+
+    expect(() => runMigrations(db, [failingMigration], 1)).toThrow(StorageError);
+    expect(db.getUserVersion()).toBe(0);
+    expect(
+      db.getFirst("SELECT name FROM sqlite_master WHERE name = 'partial_table'")
+    ).toBeNull();
+  });
+
+  test('v1 to v2 migration preserves counters and event history', async () => {
+    const SQL = await initSqlJs();
+    const db = createSqlJsAdapter(new SQL.Database());
+    db.exec('PRAGMA foreign_keys = ON;');
+    runMigrations(db, [migration001Initial], 1);
+    const projects = new ProjectRepository(db);
+    const parts = new ProjectPartRepository(db);
+    const counters = new CounterRepository(db);
+    const project = projects.createProject({ name: 'Миграция' });
+    const part = parts.createPart({ projectId: project.id, name: 'Деталь' });
+    const counter = counters.createCounter({
+      projectId: project.id,
+      projectPartId: part.id,
+      name: 'Ряды',
+    });
+    counters.incrementCounter(counter.id);
+
+    runMigrations(
+      db,
+      [migration001Initial, migration002CounterPartIntegrity],
+      2
+    );
+
+    expect(db.getUserVersion()).toBe(2);
+    expect(counters.getCounterById(counter.id)?.currentValue).toBe(1);
+    expect(counters.listEventsByCounter(counter.id)).toHaveLength(1);
   });
 });
 
@@ -169,6 +229,94 @@ describe('CounterRepository', () => {
         repeatLength: 0,
       })
     ).toThrow(DomainValidationError);
+  });
+
+  test('rejects a project part belonging to another project', async () => {
+    const db = await openTestDb();
+    const projects = new ProjectRepository(db);
+    const parts = new ProjectPartRepository(db);
+    const counters = new CounterRepository(db);
+    const first = projects.createProject({ name: 'Первый' });
+    const second = projects.createProject({ name: 'Второй' });
+    const part = parts.createPart({ projectId: first.id, name: 'Деталь' });
+
+    expect(() =>
+      counters.createCounter({
+        projectId: second.id,
+        projectPartId: part.id,
+        name: 'Чужая деталь',
+      })
+    ).toThrow(DomainValidationError);
+  });
+
+  test('deleting a part detaches its counter without losing history', async () => {
+    const db = await openTestDb();
+    const projects = new ProjectRepository(db);
+    const parts = new ProjectPartRepository(db);
+    const counters = new CounterRepository(db);
+    const project = projects.createProject({ name: 'Кардиган' });
+    const part = parts.createPart({ projectId: project.id, name: 'Рукав' });
+    const counter = counters.createCounter({
+      projectId: project.id,
+      projectPartId: part.id,
+      name: 'Ряды рукава',
+    });
+    counters.incrementCounter(counter.id);
+
+    parts.deletePart(part.id);
+
+    expect(counters.getCounterById(counter.id)?.projectPartId).toBeNull();
+    expect(counters.listEventsByCounter(counter.id)).toHaveLength(1);
+  });
+
+  test('event insertion failure rolls back the counter update', async () => {
+    const db = await openTestDb();
+    const projects = new ProjectRepository(db);
+    const normalCounters = new CounterRepository(db);
+    const project = projects.createProject({ name: 'Шарф' });
+    const counter = normalCounters.createCounter({
+      projectId: project.id,
+      name: 'Ряды',
+      startValue: 7,
+    });
+    const failingDb: SqlDatabase = {
+      ...db,
+      run(sql, params) {
+        if (sql.includes('INSERT INTO counter_events')) {
+          throw new StorageError('controlled event failure');
+        }
+        return db.run(sql, params);
+      },
+    };
+
+    expect(() => new CounterRepository(failingDb).incrementCounter(counter.id)).toThrow(
+      /controlled event failure/
+    );
+    expect(normalCounters.getCounterById(counter.id)?.currentValue).toBe(7);
+    expect(normalCounters.listEventsByCounter(counter.id)).toHaveLength(0);
+  });
+
+  test('project deletion cascades through parts, counters, and events', async () => {
+    const db = await openTestDb();
+    const projects = new ProjectRepository(db);
+    const parts = new ProjectPartRepository(db);
+    const counters = new CounterRepository(db);
+    const project = projects.createProject({ name: 'Пуловер' });
+    const part = parts.createPart({ projectId: project.id, name: 'Спинка' });
+    const counter = counters.createCounter({
+      projectId: project.id,
+      projectPartId: part.id,
+      name: 'Ряды',
+    });
+    counters.incrementCounter(counter.id);
+
+    projects.deleteProject(project.id);
+
+    expect(db.getFirst('SELECT id FROM project_parts WHERE id = ?', [part.id])).toBeNull();
+    expect(db.getFirst('SELECT id FROM counters WHERE id = ?', [counter.id])).toBeNull();
+    expect(
+      db.getFirst('SELECT id FROM counter_events WHERE counter_id = ?', [counter.id])
+    ).toBeNull();
   });
 });
 

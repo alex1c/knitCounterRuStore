@@ -10,6 +10,7 @@ import {
   validateCounterValue,
   validateNonEmptyName,
   validateRepeatLength,
+  validatePosition,
   DomainValidationError,
 } from '@/domain/validation';
 import type { SqlDatabase } from '@/db/types';
@@ -73,6 +74,8 @@ export class CounterRepository {
     const startValue = input.startValue ?? 0;
     validateCounterValue(startValue, 'startValue');
     validateRepeatLength(input.repeatLength);
+    validatePosition(input.position ?? 0);
+    this.validatePartScope(input.projectId, input.projectPartId ?? null);
 
     if (input.targetValue != null) {
       validateCounterValue(input.targetValue, 'targetValue');
@@ -182,6 +185,8 @@ export class CounterRepository {
     if (updated.targetValue != null) {
       validateCounterValue(updated.targetValue, 'targetValue');
     }
+    validatePosition(updated.position);
+    this.validatePartScope(updated.projectId, updated.projectPartId);
 
     try {
       this.db.run(
@@ -223,6 +228,7 @@ export class CounterRepository {
    * Atomically increments counter value and records a counter_event.
    */
   incrementCounter(id: string, delta = 1): CounterValueChangeResult {
+    validatePositiveDelta(delta);
     return this.changeCounterValue(id, 'increment', (current) => current + delta);
   }
 
@@ -230,6 +236,7 @@ export class CounterRepository {
    * Atomically decrements counter value and records a counter_event.
    */
   decrementCounter(id: string, delta = 1): CounterValueChangeResult {
+    validatePositiveDelta(delta);
     return this.changeCounterValue(id, 'decrement', (current) => current - delta);
   }
 
@@ -311,6 +318,26 @@ export class CounterRepository {
       }
       throw new StorageError('Failed to change counter value', err);
     }
+  }
+
+  private validatePartScope(projectId: string, partId: string | null): void {
+    if (partId === null) return;
+    const part = this.db.getFirst<{ project_id: string }>(
+      'SELECT project_id FROM project_parts WHERE id = ?',
+      [partId]
+    );
+    if (!part || part.project_id !== projectId) {
+      throw new DomainValidationError(
+        'projectPartId must reference a part in the counter project',
+        'projectPartId'
+      );
+    }
+  }
+}
+
+function validatePositiveDelta(delta: number): void {
+  if (!Number.isSafeInteger(delta) || delta <= 0) {
+    throw new DomainValidationError('delta must be a positive integer', 'delta');
   }
 }
 

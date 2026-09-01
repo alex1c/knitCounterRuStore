@@ -16,12 +16,13 @@ Screens never execute raw SQL. All persistence goes through typed repositories.
 
 ## Database Lifecycle
 
-1. `DatabaseProvider` opens the database once on mount via `openAppDatabase()`.
+1. `DatabaseProvider` requests the module-level singleton via `openAppDatabase()`.
 2. `createDatabaseFromClient()` enables `PRAGMA foreign_keys = ON`.
 3. `runMigrations()` applies pending migrations using `PRAGMA user_version`.
 4. Repository instances are memoized and exposed via `useDatabase()`.
 
-There is a single shared opening path — no concurrent independent bootstrap.
+There is a single shared opening/bootstrap path. The connection is cached only
+after successful migration, so a failed initialization can be retried.
 
 ## Migration Strategy
 
@@ -39,7 +40,7 @@ There is a single shared opening path — no concurrent independent bootstrap.
 
 ## Schema Version
 
-Current: **1** (`CURRENT_SCHEMA_VERSION` in `src/db/migrations/index.ts`)
+Current: **2** (`CURRENT_SCHEMA_VERSION` in `src/db/migrations/index.ts`)
 
 Tables: `app_settings`, `knitting_projects`, `project_parts`, `counters`, `counter_events`
 

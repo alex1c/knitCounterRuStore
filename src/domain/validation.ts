@@ -71,9 +71,9 @@ export function validateCounterEventType(value: string): CounterEventType {
 
 /** Counter values must be non-negative integers. */
 export function validateCounterValue(value: number, field: string): void {
-  if (!Number.isInteger(value)) {
+  if (!Number.isSafeInteger(value)) {
     throw new DomainValidationError(
-      `${field} must be an integer, received ${value}`,
+      `${field} must be a safe integer, received ${value}`,
       field
     );
   }
@@ -90,11 +90,18 @@ export function validateRepeatLength(value: number | null | undefined): void {
   if (value == null) {
     return;
   }
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new DomainValidationError(
       'repeat_length must be a positive integer',
       'repeatLength'
     );
+  }
+}
+
+/** Display ordering values are non-negative integers. */
+export function validatePosition(value: number, field = 'position'): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new DomainValidationError(`${field} must be a non-negative integer`, field);
   }
 }
 

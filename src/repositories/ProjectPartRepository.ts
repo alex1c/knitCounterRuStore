@@ -4,7 +4,7 @@
 
 import { StorageError } from '@/domain/errors';
 import type { ProjectPart } from '@/domain/types';
-import { validateNonEmptyName } from '@/domain/validation';
+import { validateNonEmptyName, validatePosition } from '@/domain/validation';
 import type { SqlDatabase } from '@/db/types';
 import { createId } from '@/utils/id';
 import { nowIsoUtc } from '@/utils/timestamps';
@@ -37,6 +37,7 @@ export class ProjectPartRepository {
     const now = nowIsoUtc();
     const id = createId();
     const position = input.position ?? 0;
+    validatePosition(position);
 
     const part: ProjectPart = {
       id,
@@ -98,6 +99,7 @@ export class ProjectPartRepository {
       position: input.position !== undefined ? input.position : existing.position,
       updatedAt: nowIsoUtc(),
     };
+    validatePosition(updated.position);
 
     try {
       this.db.run(
