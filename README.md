@@ -8,7 +8,7 @@ Repository: https://github.com/alex1c/knitCounterRuStore
 
 ## Current Phase
 
-**Phase 1 — Foundation** (navigation shell, design system, SQLite schema, repositories, tests)
+**Phase 2 — Projects + Core Knitting Counter** (create projects, count rows, undo, multiple counters)
 
 ## Stack
 

@@ -260,6 +260,33 @@ export class CounterRepository {
     }
   }
 
+  /** Returns how many events exist for a counter (for delete confirmation). */
+  countEventsByCounter(counterId: string): number {
+    try {
+      const row = this.db.getFirst<{ count: number }>(
+        'SELECT COUNT(*) AS count FROM counter_events WHERE counter_id = ?',
+        [counterId]
+      );
+      return row?.count ?? 0;
+    } catch (err) {
+      throw new StorageError('Failed to count counter events', err);
+    }
+  }
+
+  /**
+   * Undoes the most recent value change by restoring previous_value.
+   * Appends a new `set` event — history is never silently deleted.
+   */
+  undoLastChange(id: string): CounterValueChangeResult {
+    const events = this.listEventsByCounter(id);
+    if (events.length === 0) {
+      throw new DomainValidationError('Нет изменений для отмены', 'undo');
+    }
+
+    const lastEvent = events[0];
+    return this.setCounterValue(id, lastEvent.previousValue);
+  }
+
   /**
    * Shared atomic path: read → compute → update counter → insert event.
    */

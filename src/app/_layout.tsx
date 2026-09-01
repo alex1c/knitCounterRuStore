@@ -38,6 +38,18 @@ export default function RootLayout() {
         <DatabaseGate>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="project/form"
+              options={{ title: 'Проект', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="project/[id]"
+              options={{ title: 'Проект' }}
+            />
+            <Stack.Screen
+              name="project/knit/[id]"
+              options={{ headerShown: false, gestureEnabled: false }}
+            />
           </Stack>
         </DatabaseGate>
       </ThemeProvider>

@@ -1,20 +1,89 @@
 /**
- * Проекты — future project list.
+ * Проекты — project list with create and open.
  */
 
-import { Ionicons } from '@expo/vector-icons';
-import { Screen } from '@/components/ui/Screen';
+import { router } from 'expo-router';
+import React from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+
+import { ProjectCard } from '@/components/project/ProjectCard';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { colors } from '@/theme/tokens';
+import { Screen } from '@/components/ui/Screen';
+import { useProjectList } from '@/hooks/useProjectList';
+import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function ProjectsScreen() {
+  const { items, loading } = useProjectList();
+
+  if (loading) {
+    return (
+      <Screen>
+        <Text style={styles.loading}>Загрузка…</Text>
+      </Screen>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Пока нет проектов"
+          description="Создайте первый проект — счётчик рядов всегда будет под рукой."
+        />
+        <View style={styles.cta}>
+          <Button
+            title="Создать проект"
+            onPress={() => router.push('/project/form')}
+          />
+        </View>
+      </Screen>
+    );
+  }
+
   return (
-    <Screen>
-      <EmptyState
-        icon={<Ionicons name="folder-open-outline" size={48} color={colors.primaryMuted} />}
-        title="Список проектов"
-        description="Здесь будут ваши вязальные проекты с счётчиками рядов, деталями и заметками. Скоро можно будет создать первый проект."
+    <Screen contentStyle={styles.screenContent}>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.project.id}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <Button
+            title="Создать проект"
+            onPress={() => router.push('/project/form')}
+            style={styles.createBtn}
+          />
+        }
+        renderItem={({ item }) => (
+          <ProjectCard
+            project={item.project}
+            primaryCounter={item.primaryCounter}
+            onPress={() => router.push(`/project/${item.project.id}`)}
+          />
+        )}
       />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  screenContent: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    flex: 1,
+  },
+  list: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  createBtn: {
+    marginBottom: spacing.md,
+  },
+  loading: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  cta: {
+    marginTop: spacing.lg,
+  },
+});

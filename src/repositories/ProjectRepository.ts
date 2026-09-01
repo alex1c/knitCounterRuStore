@@ -203,6 +203,22 @@ export class ProjectRepository {
       throw new StorageError('Failed to delete project', err);
     }
   }
+
+  /** Updates only updated_at — used when user resumes knitting. */
+  touchProject(id: string): void {
+    try {
+      const result = this.db.run(
+        'UPDATE knitting_projects SET updated_at = ? WHERE id = ?',
+        [nowIsoUtc(), id]
+      );
+      if (result.changes === 0) {
+        throw new StorageError(`Project not found: ${id}`);
+      }
+    } catch (err) {
+      if (err instanceof StorageError) throw err;
+      throw new StorageError('Failed to touch project', err);
+    }
+  }
 }
 
 function mapProject(row: ProjectRow): KnittingProject {

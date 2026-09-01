@@ -19,6 +19,7 @@ import { CounterRepository } from '@/repositories/CounterRepository';
 import { ProjectPartRepository } from '@/repositories/ProjectPartRepository';
 import { ProjectRepository } from '@/repositories/ProjectRepository';
 import { SettingsRepository } from '@/repositories/SettingsRepository';
+import { ProjectService } from '@/services/ProjectService';
 
 export type DatabaseContextValue = {
   ready: boolean;
@@ -28,6 +29,7 @@ export type DatabaseContextValue = {
   projectPartRepository: ProjectPartRepository | null;
   counterRepository: CounterRepository | null;
   settingsRepository: SettingsRepository | null;
+  projectService: ProjectService | null;
 };
 
 const DatabaseContext = createContext<DatabaseContextValue | null>(null);
@@ -80,6 +82,7 @@ export function DatabaseProvider({ children }: Props) {
         projectPartRepository: null,
         counterRepository: null,
         settingsRepository: null,
+        projectService: null,
       };
     }
 
@@ -91,6 +94,7 @@ export function DatabaseProvider({ children }: Props) {
       projectPartRepository: new ProjectPartRepository(db),
       counterRepository: new CounterRepository(db),
       settingsRepository: new SettingsRepository(db),
+      projectService: new ProjectService(db),
     };
   }, [db, error]);
 
