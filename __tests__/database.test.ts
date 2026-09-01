@@ -97,12 +97,21 @@ describe('database', () => {
     const counters = new CounterRepository(db);
     const project = projects.createProject({ name: 'Миграция' });
     const part = parts.createPart({ projectId: project.id, name: 'Деталь' });
-    const counter = counters.createCounter({
-      projectId: project.id,
-      projectPartId: part.id,
-      name: 'Ряды',
-    });
-    counters.incrementCounter(counter.id);
+    const counterId = 'counter-migration-v2';
+    const now = '2026-01-01T00:00:00.000Z';
+    db.run(
+      `INSERT INTO counters (
+        id, project_id, project_part_id, name, current_value, start_value,
+        target_value, repeat_length, is_primary, position, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [counterId, project.id, part.id, 'Ряды', 1, 0, null, null, 0, 0, now, now]
+    );
+    db.run(
+      `INSERT INTO counter_events (
+        id, counter_id, previous_value, new_value, event_type, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      ['event-migration-v2', counterId, 0, 1, 'increment', now]
+    );
 
     runMigrations(
       db,
@@ -111,8 +120,8 @@ describe('database', () => {
     );
 
     expect(db.getUserVersion()).toBe(2);
-    expect(counters.getCounterById(counter.id)?.currentValue).toBe(1);
-    expect(counters.listEventsByCounter(counter.id)).toHaveLength(1);
+    expect(counters.getCounterById(counterId)?.currentValue).toBe(1);
+    expect(counters.listEventsByCounter(counterId)).toHaveLength(1);
   });
 });
 

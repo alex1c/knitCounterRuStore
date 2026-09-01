@@ -50,6 +50,10 @@ export default function RootLayout() {
               name="project/knit/[id]"
               options={{ headerShown: false, gestureEnabled: false }}
             />
+            <Stack.Screen
+              name="project/rules/form"
+              options={{ title: 'Действия по рядам', presentation: 'modal' }}
+            />
           </Stack>
         </DatabaseGate>
       </ThemeProvider>

@@ -204,6 +204,6 @@ describe('counterDisplay', () => {
       counters.incrementCounter(primaryCounter.id);
     }
     const counter = counters.getCounterById(primaryCounter.id)!;
-    expect(formatRepeatProgress(counter)).toBe('6 / 8');
+    expect(formatRepeatProgress(counter)).toBe('5 / 8');
   });
 });

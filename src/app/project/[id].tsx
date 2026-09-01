@@ -22,11 +22,21 @@ import {
   getCraftTypeLabel,
   getProjectStatusLabel,
 } from '@/domain/labels';
-import type { Counter, ProjectPart } from '@/domain/types';
+import {
+  formatNextRuleHint,
+  getNextRuleOccurrence,
+} from '@/domain/rowRuleEngine';
+import type { Counter, ProjectPart, RowRule } from '@/domain/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { formatDuration } from '@/repositories/KnittingSessionRepository';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
-import { formatCounterProgress, formatRepeatProgress } from '@/utils/counterDisplay';
+import {
+  formatCounterProgress,
+  formatLinkedRepeatProgress,
+  formatRepeatProgress,
+  isLinkedCounter,
+} from '@/utils/counterDisplay';
 
 type PromptState = {
   title: string;
@@ -38,7 +48,7 @@ type PromptState = {
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { detail, loading, reload } = useProjectDetail(id);
-  const { projectPartRepository, counterRepository, projectRepository } =
+  const { projectPartRepository, counterRepository, projectRepository, rowRuleRepository } =
     useDatabase();
   const [newPartName, setNewPartName] = useState('');
   const [newCounterName, setNewCounterName] = useState('');
@@ -55,8 +65,16 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const { project, parts, counters } = detail;
+  const { project, parts, counters, rules, totalKnittingSeconds, activeRuleCount } = detail;
   const primaryCounter = counters.find((c) => c.isPrimary) ?? counters[0];
+
+  const primaryRules = rules.filter(
+    (r) => r.counterId === primaryCounter?.id && r.isActive
+  );
+  const nextRule =
+    primaryCounter && primaryRules.length > 0
+      ? getNextRuleOccurrence(primaryRules, primaryCounter.currentValue)
+      : null;
 
   const handleDeleteProject = () => {
     Alert.alert(
@@ -178,6 +196,57 @@ export default function ProjectDetailScreen() {
     });
   };
 
+  const handleLinkCounter = (counter: Counter) => {
+    if (!primaryCounter || counter.id === primaryCounter.id || isLinkedCounter(counter)) {
+      return;
+    }
+    showPrompt({
+      title: 'Связать с основным счётчиком',
+      defaultValue: counter.repeatLength?.toString() ?? '12',
+      keyboardType: 'numeric',
+      onSubmit: (text) => {
+        closePrompt();
+        if (!counterRepository) return;
+        const n = Number(text.trim());
+        if (!Number.isInteger(n) || n <= 0) return;
+        counterRepository.updateCounter(counter.id, {
+          parentCounterId: primaryCounter.id,
+          linkType: 'follow_main',
+          repeatLength: n,
+        });
+        reload();
+      },
+    });
+  };
+
+  const handleUnlinkCounter = (counter: Counter) => {
+    if (!counterRepository) return;
+    counterRepository.updateCounter(counter.id, {
+      parentCounterId: null,
+      linkType: null,
+    });
+    reload();
+  };
+
+  const handleToggleRule = (rule: RowRule) => {
+    rowRuleRepository?.updateRule(rule.id, { isActive: !rule.isActive });
+    reload();
+  };
+
+  const handleDeleteRule = (rule: RowRule) => {
+    Alert.alert('Удалить действие?', rule.instruction, [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Удалить',
+        style: 'destructive',
+        onPress: () => {
+          rowRuleRepository?.deleteRule(rule.id);
+          reload();
+        },
+      },
+    ]);
+  };
+
   const handleDeleteCounter = (counter: Counter) => {
     const eventCount = counterRepository?.countEventsByCounter(counter.id) ?? 0;
     const message =
@@ -231,6 +300,80 @@ export default function ProjectDetailScreen() {
       />
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Действия по рядам</Text>
+        <Text style={styles.sectionMeta}>
+          Активных: {activeRuleCount}
+          {nextRule ? ` · ${formatNextRuleHint(nextRule)}` : ''}
+        </Text>
+        {rules.map((rule) => {
+          const counterName =
+            counters.find((c) => c.id === rule.counterId)?.name ?? '';
+          return (
+            <Card key={rule.id} style={styles.ruleCard}>
+              <View style={styles.ruleHeader}>
+                <Text style={[styles.ruleText, !rule.isActive && styles.ruleInactive]}>
+                  {rule.instruction}
+                </Text>
+                <View style={styles.rowActions}>
+                  <Pressable
+                    accessibilityLabel={rule.isActive ? 'Отключить' : 'Включить'}
+                    onPress={() => handleToggleRule(rule)}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={rule.isActive ? 'eye-outline' : 'eye-off-outline'}
+                      size={22}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Редактировать"
+                    onPress={() =>
+                      router.push(
+                        `/project/rules/form?projectId=${project.id}&ruleId=${rule.id}`
+                      )
+                    }
+                    hitSlop={8}
+                  >
+                    <Ionicons name="pencil-outline" size={22} color={colors.primary} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Удалить"
+                    onPress={() => handleDeleteRule(rule)}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="trash-outline" size={22} color={colors.danger} />
+                  </Pressable>
+                </View>
+              </View>
+              <Text style={styles.counterMeta}>
+                {counterName}
+                {!rule.isActive ? ' · выключено' : ''}
+              </Text>
+            </Card>
+          );
+        })}
+        <Button
+          title="Добавить действие"
+          variant="secondary"
+          onPress={() =>
+            router.push(
+              `/project/rules/form?projectId=${project.id}&counterId=${primaryCounter?.id ?? ''}`
+            )
+          }
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Время вязания</Text>
+        <Card>
+          <Text style={styles.timerTotal}>
+            Всего: {formatDuration(totalKnittingSeconds)}
+          </Text>
+        </Card>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Части</Text>
         {parts.map((part) => (
           <Card key={part.id} style={styles.rowCard}>
@@ -270,20 +413,31 @@ export default function ProjectDetailScreen() {
         {counters.map((counter) => {
           const progress = formatCounterProgress(counter);
           const repeat = formatRepeatProgress(counter);
+          const linkedLine =
+            primaryCounter && isLinkedCounter(counter)
+              ? formatLinkedRepeatProgress(primaryCounter, counter)
+              : null;
           const partName = parts.find((p) => p.id === counter.projectPartId)?.name;
           return (
             <Card key={counter.id} style={styles.counterCard}>
-              <Pressable onPress={() => openKnit(counter.id)}>
+              <Pressable onPress={() => !isLinkedCounter(counter) && openKnit(counter.id)}>
                 <Text style={styles.counterName}>
                   {counter.name}
                   {counter.isPrimary ? ' · основной' : ''}
+                  {isLinkedCounter(counter) ? ' · связан' : ''}
                 </Text>
                 <Text style={styles.counterValue}>
-                  {counter.currentValue}
-                  {progress ? ` / ${counter.targetValue}` : ''}
+                  {isLinkedCounter(counter) && primaryCounter
+                    ? formatLinkedRepeatProgress(primaryCounter, counter)?.split(' ').slice(1).join(' ') ??
+                      '—'
+                    : counter.currentValue}
+                  {!isLinkedCounter(counter) && progress ? ` / ${counter.targetValue}` : ''}
                 </Text>
-                {repeat ? (
+                {repeat && !isLinkedCounter(counter) ? (
                   <Text style={styles.counterMeta}>Узор: {repeat}</Text>
+                ) : null}
+                {linkedLine ? (
+                  <Text style={styles.counterMeta}>{linkedLine}</Text>
                 ) : null}
                 {partName ? (
                   <Text style={styles.counterMeta}>Часть: {partName}</Text>
@@ -300,6 +454,20 @@ export default function ProjectDetailScreen() {
                   variant="ghost"
                   onPress={() => handleCounterRepeat(counter)}
                 />
+                {!counter.isPrimary && !isLinkedCounter(counter) ? (
+                  <Button
+                    title="Связать"
+                    variant="ghost"
+                    onPress={() => handleLinkCounter(counter)}
+                  />
+                ) : null}
+                {isLinkedCounter(counter) ? (
+                  <Button
+                    title="Отвязать"
+                    variant="ghost"
+                    onPress={() => handleUnlinkCounter(counter)}
+                  />
+                ) : null}
                 <Button
                   title="Имя"
                   variant="ghost"
@@ -348,6 +516,17 @@ const styles = StyleSheet.create({
   notes: { ...typography.caption, color: colors.textMuted },
   section: { gap: spacing.sm, marginTop: spacing.lg },
   sectionTitle: { ...typography.subtitle, color: colors.text },
+  sectionMeta: { ...typography.caption, color: colors.textMuted },
+  ruleCard: { gap: spacing.xs },
+  ruleHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  ruleText: { ...typography.body, color: colors.text, flex: 1 },
+  ruleInactive: { color: colors.textMuted, textDecorationLine: 'line-through' },
+  timerTotal: { ...typography.subtitle, color: colors.text },
   rowCard: {
     flexDirection: 'row',
     alignItems: 'center',

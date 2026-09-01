@@ -15,6 +15,7 @@ type ProjectCardProps = {
   project: KnittingProject;
   primaryCounter?: Counter | null;
   activePart?: ProjectPart | null;
+  subtitle?: string;
   onPress: () => void;
   actionLabel?: string;
   onAction?: () => void;
@@ -24,6 +25,7 @@ export function ProjectCard({
   project,
   primaryCounter,
   activePart,
+  subtitle,
   onPress,
   actionLabel,
   onAction,
@@ -64,6 +66,8 @@ export function ProjectCard({
             {progress ? ` (${progress})` : ''}
           </Text>
         ) : null}
+
+        {subtitle ? <Text style={styles.hint}>{subtitle}</Text> : null}
 
         {actionLabel && onAction ? (
           <Pressable
@@ -121,6 +125,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  hint: {
+    ...typography.caption,
+    color: colors.primary,
   },
   action: {
     marginTop: spacing.xs,

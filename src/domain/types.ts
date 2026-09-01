@@ -4,8 +4,10 @@
 
 import type {
   CounterEventType,
+  CounterLinkType,
   CraftType,
   ProjectStatus,
+  RowRuleType,
 } from './codes';
 
 export type KnittingProject = {
@@ -35,6 +37,8 @@ export type Counter = {
   id: string;
   projectId: string;
   projectPartId: string | null;
+  parentCounterId: string | null;
+  linkType: CounterLinkType | null;
   name: string;
   currentValue: number;
   startValue: number;
@@ -44,6 +48,36 @@ export type Counter = {
   position: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RowRule = {
+  id: string;
+  projectId: string;
+  projectPartId: string | null;
+  counterId: string;
+  name: string;
+  instruction: string;
+  ruleType: RowRuleType;
+  startRow: number | null;
+  everyNRows: number | null;
+  exactRow: number | null;
+  endRow: number | null;
+  isActive: boolean;
+  position: number;
+  listRows: number[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnittingSession = {
+  id: string;
+  projectId: string;
+  projectPartId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  isActive: boolean;
+  createdAt: string;
 };
 
 export type CounterEvent = {

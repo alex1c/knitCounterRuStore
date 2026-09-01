@@ -2,9 +2,10 @@
  * Counters repository — CRUD and atomic value changes with counter_events.
  */
 
-import type { CounterEventType } from '@/domain/codes';
+import type { CounterEventType, CounterLinkType } from '@/domain/codes';
 import { StorageError } from '@/domain/errors';
 import type { Counter, CounterEvent } from '@/domain/types';
+import { validateCounterLinkType } from '@/domain/rowRuleValidation';
 import {
   validateCounterEventType,
   validateCounterValue,
@@ -21,6 +22,8 @@ type CounterRow = {
   id: string;
   project_id: string;
   project_part_id: string | null;
+  parent_counter_id: string | null;
+  link_type: string | null;
   name: string;
   current_value: number;
   start_value: number;
@@ -45,6 +48,8 @@ export type CreateCounterInput = {
   projectId: string;
   name: string;
   projectPartId?: string | null;
+  parentCounterId?: string | null;
+  linkType?: CounterLinkType | null;
   startValue?: number;
   targetValue?: number | null;
   repeatLength?: number | null;
@@ -55,6 +60,8 @@ export type CreateCounterInput = {
 export type UpdateCounterInput = {
   name?: string;
   projectPartId?: string | null;
+  parentCounterId?: string | null;
+  linkType?: CounterLinkType | null;
   targetValue?: number | null;
   repeatLength?: number | null;
   isPrimary?: boolean;
@@ -76,6 +83,12 @@ export class CounterRepository {
     validateRepeatLength(input.repeatLength);
     validatePosition(input.position ?? 0);
     this.validatePartScope(input.projectId, input.projectPartId ?? null);
+    this.validateLinkConfig(
+      input.projectId,
+      input.parentCounterId ?? null,
+      input.linkType ?? null,
+      input.repeatLength ?? null
+    );
 
     if (input.targetValue != null) {
       validateCounterValue(input.targetValue, 'targetValue');
@@ -88,6 +101,8 @@ export class CounterRepository {
       id,
       projectId: input.projectId,
       projectPartId: input.projectPartId ?? null,
+      parentCounterId: input.parentCounterId ?? null,
+      linkType: input.linkType ?? null,
       name,
       currentValue: startValue,
       startValue,
@@ -102,13 +117,16 @@ export class CounterRepository {
     try {
       this.db.run(
         `INSERT INTO counters (
-          id, project_id, project_part_id, name, current_value, start_value,
+          id, project_id, project_part_id, parent_counter_id, link_type,
+          name, current_value, start_value,
           target_value, repeat_length, is_primary, position, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           counter.id,
           counter.projectId,
           counter.projectPartId,
+          counter.parentCounterId,
+          counter.linkType,
           counter.name,
           counter.currentValue,
           counter.startValue,
@@ -169,6 +187,10 @@ export class CounterRepository {
       projectPartId: input.projectPartId !== undefined
         ? input.projectPartId
         : existing.projectPartId,
+      parentCounterId: input.parentCounterId !== undefined
+        ? input.parentCounterId
+        : existing.parentCounterId,
+      linkType: input.linkType !== undefined ? input.linkType : existing.linkType,
       targetValue: input.targetValue !== undefined
         ? input.targetValue
         : existing.targetValue,
@@ -187,16 +209,25 @@ export class CounterRepository {
     }
     validatePosition(updated.position);
     this.validatePartScope(updated.projectId, updated.projectPartId);
+    this.validateLinkConfig(
+      updated.projectId,
+      updated.parentCounterId,
+      updated.linkType,
+      updated.repeatLength
+    );
 
     try {
       this.db.run(
         `UPDATE counters SET
-          name = ?, project_part_id = ?, target_value = ?, repeat_length = ?,
+          name = ?, project_part_id = ?, parent_counter_id = ?, link_type = ?,
+          target_value = ?, repeat_length = ?,
           is_primary = ?, position = ?, updated_at = ?
         WHERE id = ?`,
         [
           updated.name,
           updated.projectPartId,
+          updated.parentCounterId,
+          updated.linkType,
           updated.targetValue,
           updated.repeatLength,
           updated.isPrimary ? 1 : 0,
@@ -360,6 +391,48 @@ export class CounterRepository {
       );
     }
   }
+
+  private validateLinkConfig(
+    projectId: string,
+    parentCounterId: string | null,
+    linkType: CounterLinkType | null,
+    repeatLength: number | null | undefined
+  ): void {
+    if (linkType == null && parentCounterId == null) return;
+
+    if (linkType === 'follow_main') {
+      validateCounterLinkType(linkType);
+      if (!parentCounterId) {
+        throw new DomainValidationError(
+          'parentCounterId required for linked counter',
+          'parentCounterId'
+        );
+      }
+      validateRepeatLength(repeatLength);
+      if (repeatLength == null) {
+        throw new DomainValidationError(
+          'repeatLength required for linked counter',
+          'repeatLength'
+        );
+      }
+      const parent = this.db.getFirst<{ project_id: string; parent_counter_id: string | null }>(
+        'SELECT project_id, parent_counter_id FROM counters WHERE id = ?',
+        [parentCounterId]
+      );
+      if (!parent || parent.project_id !== projectId) {
+        throw new DomainValidationError(
+          'parent counter must belong to the same project',
+          'parentCounterId'
+        );
+      }
+      if (parent.parent_counter_id != null) {
+        throw new DomainValidationError(
+          'only one-level counter links are allowed',
+          'parentCounterId'
+        );
+      }
+    }
+  }
 }
 
 function validatePositiveDelta(delta: number): void {
@@ -373,6 +446,8 @@ function mapCounter(row: CounterRow): Counter {
     id: row.id,
     projectId: row.project_id,
     projectPartId: row.project_part_id,
+    parentCounterId: row.parent_counter_id,
+    linkType: row.link_type as CounterLinkType | null,
     name: row.name,
     currentValue: row.current_value,
     startValue: row.start_value,

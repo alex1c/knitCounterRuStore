@@ -19,6 +19,8 @@ import { CounterRepository } from '@/repositories/CounterRepository';
 import { ProjectPartRepository } from '@/repositories/ProjectPartRepository';
 import { ProjectRepository } from '@/repositories/ProjectRepository';
 import { SettingsRepository } from '@/repositories/SettingsRepository';
+import { RowRuleRepository } from '@/repositories/RowRuleRepository';
+import { KnittingSessionRepository } from '@/repositories/KnittingSessionRepository';
 import { ProjectService } from '@/services/ProjectService';
 
 export type DatabaseContextValue = {
@@ -29,6 +31,8 @@ export type DatabaseContextValue = {
   projectPartRepository: ProjectPartRepository | null;
   counterRepository: CounterRepository | null;
   settingsRepository: SettingsRepository | null;
+  rowRuleRepository: RowRuleRepository | null;
+  knittingSessionRepository: KnittingSessionRepository | null;
   projectService: ProjectService | null;
 };
 
@@ -82,6 +86,8 @@ export function DatabaseProvider({ children }: Props) {
         projectPartRepository: null,
         counterRepository: null,
         settingsRepository: null,
+        rowRuleRepository: null,
+        knittingSessionRepository: null,
         projectService: null,
       };
     }
@@ -94,6 +100,8 @@ export function DatabaseProvider({ children }: Props) {
       projectPartRepository: new ProjectPartRepository(db),
       counterRepository: new CounterRepository(db),
       settingsRepository: new SettingsRepository(db),
+      rowRuleRepository: new RowRuleRepository(db),
+      knittingSessionRepository: new KnittingSessionRepository(db),
       projectService: new ProjectService(db),
     };
   }, [db, error]);

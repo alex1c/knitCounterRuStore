@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useProjectList } from '@/hooks/useProjectList';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { formatNextRuleHint, getNextRuleOccurrence } from '@/domain/rowRuleEngine';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { getActiveProjects } from '@/utils/projectSort';
 
@@ -31,11 +32,21 @@ function ActiveProjectCard({
     ? detail.parts.find((p) => p.id === primaryCounter.projectPartId) ?? null
     : null;
 
+  const primaryRules = detail.rules.filter(
+    (r) => r.counterId === primaryCounter?.id && r.isActive
+  );
+  const nextRule =
+    primaryCounter && primaryRules.length > 0
+      ? getNextRuleOccurrence(primaryRules, primaryCounter.currentValue)
+      : null;
+  const ruleHint = nextRule ? formatNextRuleHint(nextRule) : null;
+
   return (
     <ProjectCard
       project={detail.project}
       primaryCounter={primaryCounter}
       activePart={activePart}
+      subtitle={ruleHint ?? undefined}
       onPress={() => router.push(`/project/${projectId}`)}
       actionLabel="Продолжить вязание"
       onAction={onContinue}

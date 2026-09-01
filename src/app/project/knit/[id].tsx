@@ -1,5 +1,5 @@
 /**
- * Active knitting screen — large counter, +1 tap zone, decrement, undo.
+ * Active knitting screen — counter, rules, linked patterns, timer.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -16,13 +16,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Counter } from '@/domain/types';
+import { RowRuleBanner } from '@/components/knitting/RowRuleBanner';
+import type { Counter, KnittingSession } from '@/domain/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import {
+  formatDuration,
+} from '@/repositories/KnittingSessionRepository';
 import { colors, spacing, typography } from '@/theme/tokens';
 import {
   formatCounterProgress,
+  formatLinkedRepeatProgress,
   formatRepeatProgress,
+  isLinkedCounter,
 } from '@/utils/counterDisplay';
 import { enqueueCounterMutation } from '@/utils/counterQueue';
 import { hapticIncrementSuccess } from '@/utils/haptics';
@@ -36,28 +42,44 @@ export default function KnittingScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { detail, reload } = useProjectDetail(id);
-  const { counterRepository, projectService } = useDatabase();
+  const { counterRepository, projectService, knittingSessionRepository } =
+    useDatabase();
 
   const [activeCounterId, setActiveCounterId] = useState<string | null>(null);
   const [displayCounter, setDisplayCounter] = useState<Counter | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeSession, setActiveSession] = useState<KnittingSession | null>(null);
+  const [elapsed, setElapsed] = useState(0);
 
   const counters = detail?.counters;
   const parts = detail?.parts;
   const project = detail?.project;
+  const rules = useMemo(() => detail?.rules ?? [], [detail?.rules]);
+
+  const countableCounters = useMemo(
+    () => (counters ?? []).filter((c) => !isLinkedCounter(c)),
+    [counters]
+  );
+
+  const linkedCounters = useMemo(
+    () => (counters ?? []).filter((c) => isLinkedCounter(c)),
+    [counters]
+  );
 
   const resolvedCounterId = useMemo(() => {
     if (activeCounterId) return activeCounterId;
-    if (initialCounterId) return initialCounterId;
-    const list = counters ?? [];
-    const primary = list.find((c) => c.isPrimary);
-    return primary?.id ?? list[0]?.id ?? null;
-  }, [activeCounterId, initialCounterId, counters]);
+    const initial = counters?.find((c) => c.id === initialCounterId);
+    if (initialCounterId && initial && !isLinkedCounter(initial)) {
+      return initialCounterId;
+    }
+    const primary = countableCounters.find((c) => c.isPrimary);
+    return primary?.id ?? countableCounters[0]?.id ?? null;
+  }, [activeCounterId, initialCounterId, counters, countableCounters]);
 
   const displayFromRepo = useMemo(() => {
     if (!resolvedCounterId || !counterRepository) return null;
     return counterRepository.getCounterById(resolvedCounterId);
-  }, [resolvedCounterId, counterRepository, detail?.counters]);
+  }, [resolvedCounterId, counterRepository, detail]);
 
   useEffect(() => {
     if (displayFromRepo) {
@@ -66,7 +88,24 @@ export default function KnittingScreen() {
   }, [displayFromRepo]);
 
   useEffect(() => {
-    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    if (!id || !knittingSessionRepository) return;
+    const session = knittingSessionRepository.getActiveSession(id);
+    queueMicrotask(() => {
+      setActiveSession(session);
+      setElapsed(session ? knittingSessionRepository.getElapsedSeconds(session) : 0);
+    });
+  }, [id, knittingSessionRepository, detail?.totalKnittingSeconds]);
+
+  useEffect(() => {
+    if (!activeSession?.isActive || !knittingSessionRepository) return;
+    const tick = setInterval(() => {
+      setElapsed(knittingSessionRepository.getElapsedSeconds(activeSession));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [activeSession, knittingSessionRepository]);
+
+  useEffect(() => {
+    void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
     return () => {
       deactivateKeepAwake(KEEP_AWAKE_TAG);
     };
@@ -76,6 +115,11 @@ export default function KnittingScreen() {
     if (!displayCounter?.projectPartId || !parts) return null;
     return parts.find((p) => p.id === displayCounter.projectPartId) ?? null;
   }, [displayCounter, parts]);
+
+  const counterRules = useMemo(
+    () => rules.filter((r) => r.counterId === resolvedCounterId),
+    [rules, resolvedCounterId]
+  );
 
   const runMutation = useCallback(
     async (fn: () => void) => {
@@ -88,6 +132,7 @@ export default function KnittingScreen() {
           if (updated) setDisplayCounter(updated);
           if (project) projectService?.touchProject(project.id);
         });
+        reload();
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Не удалось изменить счётчик';
@@ -122,6 +167,23 @@ export default function KnittingScreen() {
     });
   }, [counterRepository, resolvedCounterId, runMutation]);
 
+  const handleTimerToggle = () => {
+    if (!knittingSessionRepository || !id) return;
+    if (activeSession?.isActive) {
+      const stopped = knittingSessionRepository.stopSession(activeSession.id);
+      setActiveSession(null);
+      setElapsed(stopped.durationSeconds ?? 0);
+      reload();
+    } else {
+      const started = knittingSessionRepository.startSession(
+        id,
+        displayCounter?.projectPartId ?? undefined
+      );
+      setActiveSession(started);
+      setElapsed(0);
+    }
+  };
+
   if (!project || !displayCounter) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -132,11 +194,9 @@ export default function KnittingScreen() {
 
   const progress = formatCounterProgress(displayCounter);
   const repeat = formatRepeatProgress(displayCounter);
-  const otherCounters = (counters ?? []).filter((c) => c.id !== displayCounter.id);
 
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom }]}>
-      {/* Compact header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable
           accessibilityLabel="Назад"
@@ -156,16 +216,29 @@ export default function KnittingScreen() {
             </Text>
           ) : null}
         </View>
+        <Pressable
+          accessibilityLabel={activeSession?.isActive ? 'Остановить таймер' : 'Начать таймер'}
+          onPress={handleTimerToggle}
+          style={styles.timerBtn}
+        >
+          <Ionicons
+            name={activeSession?.isActive ? 'pause-circle-outline' : 'timer-outline'}
+            size={26}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.timerText}>
+            {activeSession?.isActive ? formatDuration(elapsed) : 'Таймер'}
+          </Text>
+        </Pressable>
       </View>
 
-      {/* Counter selector chips */}
-      {counters && counters.length > 1 ? (
+      {countableCounters.length > 1 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipRow}
         >
-          {counters.map((c) => {
+          {countableCounters.map((c) => {
             const selected = c.id === displayCounter.id;
             return (
               <Pressable
@@ -187,7 +260,11 @@ export default function KnittingScreen() {
         </ScrollView>
       ) : null}
 
-      {/* Main counter display */}
+      <RowRuleBanner
+        rules={counterRules}
+        currentRow={displayCounter.currentValue}
+      />
+
       <View style={styles.counterArea}>
         <Text style={styles.counterLabel}>{displayCounter.name}</Text>
         <Text
@@ -196,15 +273,18 @@ export default function KnittingScreen() {
         >
           {displayCounter.currentValue}
         </Text>
-        {progress ? (
-          <Text style={styles.progress}>{progress}</Text>
-        ) : null}
-        {repeat ? (
-          <Text style={styles.repeat}>Узор: {repeat}</Text>
-        ) : null}
+        {progress ? <Text style={styles.progress}>{progress}</Text> : null}
+        {repeat ? <Text style={styles.repeat}>Узор: {repeat}</Text> : null}
+        {linkedCounters.map((linked) => {
+          const line = formatLinkedRepeatProgress(displayCounter, linked);
+          return line ? (
+            <Text key={linked.id} style={styles.linked}>
+              {line}
+            </Text>
+          ) : null;
+        })}
       </View>
 
-      {/* Huge +1 tap zone */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Добавить ряд"
@@ -220,7 +300,6 @@ export default function KnittingScreen() {
         <Text style={styles.incrementHint}>Нажмите для следующего ряда</Text>
       </Pressable>
 
-      {/* Secondary controls */}
       <View style={styles.controls}>
         <Pressable
           accessibilityRole="button"
@@ -232,7 +311,6 @@ export default function KnittingScreen() {
           <Ionicons name="remove" size={28} color={colors.text} />
           <Text style={styles.secondaryLabel}>−1</Text>
         </Pressable>
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Отменить последнее действие"
@@ -244,22 +322,12 @@ export default function KnittingScreen() {
           <Text style={styles.secondaryLabel}>Отмена</Text>
         </Pressable>
       </View>
-
-      {otherCounters.length > 0 ? (
-        <Text style={styles.otherHint} numberOfLines={1}>
-          Другие счётчики:{' '}
-          {otherCounters.map((c) => `${c.name} ${c.currentValue}`).join(' · ')}
-        </Text>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  root: { flex: 1, backgroundColor: colors.background },
   loading: {
     ...typography.body,
     color: colors.textSecondary,
@@ -273,22 +341,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 48,
   },
-  backBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  headerText: {
-    flex: 1,
-  },
-  projectName: {
-    ...typography.subtitle,
-    color: colors.text,
-  },
-  partName: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
+  backBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  headerText: { flex: 1 },
+  projectName: { ...typography.subtitle, color: colors.text },
+  partName: { ...typography.caption, color: colors.textMuted },
+  timerBtn: { alignItems: 'center', minWidth: 56, minHeight: 44 },
+  timerText: { ...typography.caption, color: colors.textMuted },
   chipRow: {
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
@@ -306,17 +364,11 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
-  chipText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  chipTextOn: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
+  chipText: { ...typography.caption, color: colors.textSecondary },
+  chipTextOn: { color: colors.primary, fontWeight: '600' },
   counterArea: {
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
   },
   counterLabel: {
@@ -331,16 +383,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontVariant: ['tabular-nums'],
   },
-  progress: {
-    ...typography.subtitle,
-    color: colors.primary,
-    marginTop: spacing.sm,
-  },
-  repeat: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
+  progress: { ...typography.subtitle, color: colors.primary, marginTop: spacing.sm },
+  repeat: { ...typography.body, color: colors.textSecondary, marginTop: spacing.xs },
+  linked: { ...typography.body, color: colors.primary, marginTop: spacing.xs },
   incrementZone: {
     flex: 1,
     marginHorizontal: spacing.md,
@@ -349,15 +394,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 160,
+    minHeight: 140,
   },
-  incrementPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
-  },
-  incrementBusy: {
-    opacity: 0.7,
-  },
+  incrementPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  incrementBusy: { opacity: 0.7 },
   incrementText: {
     fontSize: 64,
     fontWeight: '700',
@@ -383,15 +423,5 @@ const styles = StyleSheet.create({
     minHeight: 56,
     gap: spacing.xs,
   },
-  secondaryLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  otherHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
+  secondaryLabel: { ...typography.caption, color: colors.textSecondary },
 });

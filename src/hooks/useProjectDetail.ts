@@ -1,27 +1,42 @@
 /**
- * Hook to load project detail with parts and counters.
+ * Hook to load project detail with parts, counters, rules, and knitting time.
  */
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 
+import type { Counter, KnittingProject, ProjectPart, RowRule } from '@/domain/types';
 import { useDatabase } from '@/providers/DatabaseProvider';
-import type { Counter, KnittingProject, ProjectPart } from '@/domain/types';
 
 export type ProjectDetail = {
   project: KnittingProject;
   parts: ProjectPart[];
   counters: Counter[];
+  rules: RowRule[];
+  totalKnittingSeconds: number;
+  activeRuleCount: number;
 };
 
 export function useProjectDetail(projectId: string | undefined) {
-  const { projectRepository, projectPartRepository, counterRepository } =
-    useDatabase();
+  const {
+    projectRepository,
+    projectPartRepository,
+    counterRepository,
+    rowRuleRepository,
+    knittingSessionRepository,
+  } = useDatabase();
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(() => {
-    if (!projectId || !projectRepository || !projectPartRepository || !counterRepository) {
+    if (
+      !projectId ||
+      !projectRepository ||
+      !projectPartRepository ||
+      !counterRepository ||
+      !rowRuleRepository ||
+      !knittingSessionRepository
+    ) {
       setDetail(null);
       setLoading(false);
       return;
@@ -36,9 +51,28 @@ export function useProjectDetail(projectId: string | undefined) {
 
     const parts = projectPartRepository.listPartsByProject(projectId);
     const counters = counterRepository.listCountersByProject(projectId);
-    setDetail({ project, parts, counters });
+    const rules = rowRuleRepository.listRulesByProject(projectId);
+    const totalKnittingSeconds =
+      knittingSessionRepository.getTotalDurationSeconds(projectId);
+    const activeRuleCount = rowRuleRepository.countActiveByProject(projectId);
+
+    setDetail({
+      project,
+      parts,
+      counters,
+      rules,
+      totalKnittingSeconds,
+      activeRuleCount,
+    });
     setLoading(false);
-  }, [projectId, projectRepository, projectPartRepository, counterRepository]);
+  }, [
+    projectId,
+    projectRepository,
+    projectPartRepository,
+    counterRepository,
+    rowRuleRepository,
+    knittingSessionRepository,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
