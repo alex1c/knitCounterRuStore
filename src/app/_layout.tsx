@@ -1,0 +1,94 @@
+/**
+ * Root layout — theme, database provider, and stack navigation.
+ */
+
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from 'react-native';
+import 'react-native-reanimated';
+
+import { DatabaseProvider, useDatabase } from '@/providers/DatabaseProvider';
+import { colors, spacing, typography } from '@/theme/tokens';
+
+export { ErrorBoundary } from 'expo-router';
+
+export const unstable_settings = {
+  initialRouteName: '(tabs)',
+};
+
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
+  return (
+    <DatabaseProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <DatabaseGate>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+        </DatabaseGate>
+      </ThemeProvider>
+    </DatabaseProvider>
+  );
+}
+
+/** Shows loading or error state while the database initializes. */
+function DatabaseGate({ children }: { children: React.ReactNode }) {
+  const { ready, error } = useDatabase();
+
+  if (error) {
+    return (
+      <View style={styles.gate}>
+        <Text style={styles.gateTitle}>Не удалось открыть базу данных</Text>
+        <Text style={styles.gateMessage}>
+          Перезапустите приложение. Если проблема повторится, обратитесь в поддержку.
+        </Text>
+      </View>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <View style={styles.gate}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.gateMessage}>Загрузка…</Text>
+      </View>
+    );
+  }
+
+  return children;
+}
+
+const styles = StyleSheet.create({
+  gate: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  gateTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  gateMessage: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+});
