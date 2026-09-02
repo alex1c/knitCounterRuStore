@@ -2,7 +2,7 @@
  * Calculator — rows for height.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
   CalculatorLayout,
@@ -24,6 +24,8 @@ export default function RowsHeightCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateRowsForHeight>['value']
   >();
+
+  useEffect(() => clear(), [clear, gaugeRows, gaugeHeight, desiredHeight, rowRepeat]);
 
   return (
     <CalculatorLayout

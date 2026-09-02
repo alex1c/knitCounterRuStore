@@ -27,31 +27,21 @@ export type RepeatAdjustResult = {
 export function adjustForPatternRepeat(input: RepeatAdjustInput): RepeatAdjustResult {
   const repeat = requirePositiveInt(input.repeatSize, 'Раппорт');
   const fixed = input.fixedOffset ?? 0;
-  if (!Number.isInteger(fixed) || fixed < 0) {
-    throw new Error('fixedOffset must be a non-negative integer');
+  if (!Number.isSafeInteger(fixed) || fixed < 0 || fixed >= repeat) {
+    throw new Error('Дополнительные петли должны быть целым числом от 0 до раппорта − 1');
+  }
+  if (!Number.isFinite(input.rawBodyCount) || input.rawBodyCount <= 0) {
+    throw new Error('Расчётное количество должно быть больше 0');
   }
 
-  const raw = Math.round(input.rawBodyCount);
+  const raw = input.rawBodyCount;
   const explanation: string[] = [];
-
-  if (repeat === 1 && fixed === 0) {
-    return {
-      rawBodyCount: raw,
-      candidates: [{
-        count: raw,
-        dimensionCm: input.bodyCountToCm?.(raw) ?? null,
-        isClosest: true,
-      }],
-      recommendedCount: raw,
-      explanation: [`По плотности: ${raw}`],
-    };
-  }
 
   const lowerN = Math.floor((raw - fixed) / repeat);
   const upperN = lowerN + 1;
 
   const validCounts = new Set<number>();
-  for (const n of [lowerN - 1, lowerN, upperN, upperN + 1]) {
+  for (const n of [lowerN, upperN]) {
     if (n < 0) continue;
     const count = n * repeat + fixed;
     if (count > 0) validCounts.add(count);

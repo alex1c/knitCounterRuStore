@@ -2,7 +2,7 @@
  * Calculator — yarn requirement (grams or meters).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -23,7 +23,7 @@ import {
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
 import { useDatabase } from '@/providers/DatabaseProvider';
-import { formatMoneyMinor } from '@/utils/yarnQuantity';
+import { formatMoneyMinor, parsePriceToMinor } from '@/utils/yarnQuantity';
 
 const MODE_OPTIONS = [
   { value: 'grams', label: 'По весу (г)' },
@@ -45,6 +45,8 @@ export default function YarnRequiredCalculator() {
     ReturnType<typeof calculateYarnRequirement>['value']
   >();
 
+  useEffect(() => clear(), [clear, mode, required, weight, length, reserve, price]);
+
   const pickYarn = (yarn: Yarn) => {
     if (yarn.weightPerSkeinG) setWeight(String(yarn.weightPerSkeinG));
     if (yarn.lengthPerSkeinM) setLength(String(yarn.lengthPerSkeinM));
@@ -64,7 +66,7 @@ export default function YarnRequiredCalculator() {
             const priceMinor =
               price.trim() === ''
                 ? undefined
-                : Math.round(parseRequiredNumber(price, 'цену') * 100);
+                : parsePriceToMinor(price) ?? undefined;
             if (mode === 'grams') {
               return calculateYarnRequirement({
                 mode: 'grams',

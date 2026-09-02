@@ -8,7 +8,7 @@
 import { adjustForPatternRepeat } from './repeatAdjust';
 import { formatCm, roundToNearestInt } from './rounding';
 import type { CalculatorResult } from './types';
-import { requirePositive } from './validation';
+import { requireFiniteResult, requirePositive } from './validation';
 
 export type StitchesForWidthInput = {
   gaugeStitches: number;
@@ -38,18 +38,19 @@ export function calculateStitchesForWidth(
     throw new Error('edgeStitches must be a non-negative integer');
   }
 
-  const raw = desiredWidth * gaugeStitches / gaugeWidth;
-  const theoreticalBody = roundToNearestInt(raw);
+  const raw = requireFiniteResult(desiredWidth * gaugeStitches / gaugeWidth);
+  const theoreticalBody = raw;
+  const roundedBody = roundToNearestInt(raw);
 
   const explanation: string[] = [
     `${gaugeStitches} петель / ${formatCm(gaugeWidth)} = ${formatNumberRu(gaugeStitches / gaugeWidth, 2)} пет/см`,
-    `${formatCm(desiredWidth)} × ${formatNumberRu(gaugeStitches / gaugeWidth, 2)} = ${theoreticalBody} петель`,
+    `${formatCm(desiredWidth)} × ${formatNumberRu(gaugeStitches / gaugeWidth, 2)} = ${formatNumberRu(theoreticalBody, 2)} петли (теоретически)`,
   ];
 
-  let recommendedBody = theoreticalBody;
+  let recommendedBody = roundedBody;
   let repeatCandidates: StitchesForWidthResult['repeatCandidates'];
 
-  if (input.repeatSize != null && input.repeatSize > 0) {
+  if (input.repeatSize != null) {
     const repeat = adjustForPatternRepeat({
       rawBodyCount: theoreticalBody,
       repeatSize: input.repeatSize,
@@ -60,7 +61,7 @@ export function calculateStitchesForWidth(
     repeatCandidates = repeat.candidates;
     explanation.push(...repeat.explanation);
   } else {
-    explanation.push(`Расчётное значение: ${theoreticalBody} петель`);
+    explanation.push(`Рекомендуемое целое значение: ${roundedBody} петель (округление до ближайшего)`);
   }
 
   const total = recommendedBody + edge;

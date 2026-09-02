@@ -2,7 +2,7 @@
  * Calculator — finished size from stitches/rows.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -28,6 +28,8 @@ export default function FinishedSizeCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateFinishedSize>['value']
   >();
+
+  useEffect(() => clear(), [clear, stitches, rows, gaugeStitches, gaugeRows, gaugeWidth, gaugeHeight]);
 
   return (
     <CalculatorLayout

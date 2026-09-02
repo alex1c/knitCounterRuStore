@@ -74,9 +74,12 @@ export function calcInventoryValueMinor(
   pricePerSkeinMinor: number | null
 ): number | null {
   if (pricePerSkeinMinor == null || pricePerSkeinMinor < 0) return null;
-  return Math.round(
-    (quantityMilliskeins / MILLISKEINS_PER_SKEIN) * pricePerSkeinMinor
-  );
+  if (!Number.isSafeInteger(quantityMilliskeins) || !Number.isSafeInteger(pricePerSkeinMinor)) {
+    throw new Error('quantity and price must use safe integer storage units');
+  }
+  const product = quantityMilliskeins * pricePerSkeinMinor;
+  if (!Number.isSafeInteger(product)) throw new Error('inventory value is too large');
+  return Math.round(product / MILLISKEINS_PER_SKEIN);
 }
 
 /** Formats minor currency units as rubles with comma decimal. */

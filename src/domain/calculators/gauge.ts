@@ -4,7 +4,7 @@
 
 import { formatGaugePer10 } from './rounding';
 import type { CalculatorResult } from './types';
-import { requirePositive } from './validation';
+import { requireFiniteResult, requirePositive } from './validation';
 
 export type GaugeInput = {
   sampleWidthCm: number;
@@ -26,10 +26,10 @@ export function calculateGauge(input: GaugeInput): CalculatorResult<GaugeResult>
   const stitches = requirePositive(input.stitchesCounted, 'Петли');
   const rows = requirePositive(input.rowsCounted, 'Ряды');
 
-  const stitchesPerCm = stitches / width;
-  const rowsPerCm = rows / height;
-  const stitchesPer10 = stitchesPerCm * 10;
-  const rowsPer10 = rowsPerCm * 10;
+  const stitchesPerCm = requireFiniteResult(stitches / width);
+  const rowsPerCm = requireFiniteResult(rows / height);
+  const stitchesPer10 = requireFiniteResult(stitchesPerCm * 10);
+  const rowsPer10 = requireFiniteResult(rowsPerCm * 10);
 
   const explanation: string[] = [
     `${stitches} петель / ${width.toLocaleString('ru-RU')} см × 10 = ${formatGaugePer10(stitchesPer10, 'петель')}`,

@@ -2,7 +2,7 @@
  * Calculator — stitches for width.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -28,6 +28,8 @@ export default function StitchesWidthCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateStitchesForWidth>['value']
   >();
+
+  useEffect(() => clear(), [clear, gaugeStitches, gaugeWidth, desiredWidth, edgeStitches, repeatSize, repeatFixed]);
 
   const handleCalculate = () => {
     run(() =>
@@ -77,8 +79,8 @@ export default function StitchesWidthCalculator() {
       <FormField label="Ширина образца, см" value={gaugeWidth} onChangeText={setGaugeWidth} keyboardType="numeric" />
       <FormField label="Нужная ширина, см" value={desiredWidth} onChangeText={setDesiredWidth} keyboardType="numeric" />
       <FormField label="Кромочные петли" value={edgeStitches} onChangeText={setEdgeStitches} keyboardType="numeric" />
-      <FormField label="Раппорт узора (необязательно)" value={repeatSize} onChangeText={setRepeatSize} keyboardType="numeric" placeholder="6" />
-      <FormField label="Доп. петли к раппорту (+N)" value={repeatFixed} onChangeText={setRepeatFixed} keyboardType="numeric" placeholder="2" />
+      <FormField label="Раппорт тела изделия (необязательно)" value={repeatSize} onChangeText={setRepeatSize} keyboardType="numeric" placeholder="6" />
+      <FormField label="Доп. петли тела (+N, меньше раппорта)" value={repeatFixed} onChangeText={setRepeatFixed} keyboardType="numeric" placeholder="2" />
     </CalculatorLayout>
   );
 }

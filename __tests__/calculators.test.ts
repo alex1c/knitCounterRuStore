@@ -14,7 +14,8 @@ import {
 } from '@/domain/calculators';
 import { adjustForPatternRepeat } from '@/domain/calculators/repeatAdjust';
 import { ceilSkeins } from '@/domain/calculators/rounding';
-import { MILLISKEINS_PER_SKEIN } from '@/utils/yarnQuantity';
+import { MILLISKEINS_PER_SKEIN, calcTotalLengthM, calcTotalWeightG, parsePriceToMinor } from '@/utils/yarnQuantity';
+import { finalizeNumber, parseFlexibleNumber } from '@/utils/numeric';
 
 describe('calculators — stitches for width', () => {
   test('20 st / 10 cm × 48 cm → 96', () => {
@@ -55,6 +56,16 @@ describe('calculators — stitches for width', () => {
     });
     expect(value.recommendedBodyStitches).toBe(96);
     expect(value.totalStitches).toBe(98);
+  });
+
+  test('keeps fractional theoretical result and rounds only recommendation', () => {
+    const { value } = calculateStitchesForWidth({
+      gaugeStitches: 21,
+      gaugeWidthCm: 10,
+      desiredWidthCm: 47,
+    });
+    expect(value.theoreticalBodyStitches).toBeCloseTo(98.7, 10);
+    expect(value.recommendedBodyStitches).toBe(99);
   });
 });
 
@@ -142,6 +153,21 @@ describe('calculators — yarn requirement', () => {
   test('boundary purchase rounding', () => {
     expect(ceilSkeins(800 / 200)).toBe(4);
     expect(ceilSkeins(801 / 200)).toBe(5);
+    expect(ceilSkeins(4.000000000000001)).toBe(4);
+    expect(ceilSkeins(0)).toBe(0);
+  });
+
+  test('row count requires complete row gauge metadata', () => {
+    expect(() => calculateFinishedSize({
+      stitchCount: 96, rowCount: 98, gaugeStitches: 20, gaugeWidthCm: 10,
+    })).toThrow('Для расчёта высоты');
+  });
+
+  test('zero requirement buys zero skeins', () => {
+    const { value } = calculateYarnRequirement({
+      mode: 'grams', requiredGrams: 0, weightPerSkeinG: 100, reservePercent: 10,
+    });
+    expect(value.skeinsToBuy).toBe(0);
   });
 
   test('money uses minor units without float drift', () => {
@@ -213,6 +239,33 @@ describe('calculators — pattern repeat', () => {
     expect(recommendedCount).toBe(95);
   });
 
+  test('accepts direct total meters and preserves exact purchase boundary', () => {
+    const { value } = calculateYarnSubstitution({
+      totalRequiredMeters: 800,
+      replacementMetersPerSkein: 200,
+      reservePercent: 0,
+    });
+    expect(value.skeinsToBuy).toBe(4);
+  });
+
+  test.each([
+    { repeatSize: 0, fixedOffset: 0 },
+    { repeatSize: 6, fixedOffset: -1 },
+    { repeatSize: 6, fixedOffset: 6 },
+  ])('rejects non-canonical repeat %#', ({ repeatSize, fixedOffset }) => {
+    expect(() => adjustForPatternRepeat({ rawBodyCount: 95, repeatSize, fixedOffset })).toThrow();
+  });
+
+  test('repeat candidates bracket a fractional target and edges are added later', () => {
+    const { value } = calculateStitchesForWidth({
+      gaugeStitches: 21, gaugeWidthCm: 10, desiredWidthCm: 47,
+      repeatSize: 6, repeatFixed: 2, edgeStitches: 2,
+    });
+    expect(value.repeatCandidates?.map((candidate) => candidate.count)).toEqual([98, 104]);
+    expect(value.recommendedBodyStitches).toBe(98);
+    expect(value.totalStitches).toBe(100);
+  });
+
   test('repeat applies to body before edge stitches', () => {
     const { value } = calculateStitchesForWidth({
       gaugeStitches: 20,
@@ -239,6 +292,11 @@ describe('calculators — increase/decrease distribution', () => {
     expect(totalActions).toBe(12);
     const intervals = value.segments.map((s) => s.interval);
     expect(Math.max(...intervals) - Math.min(...intervals)).toBeLessThanOrEqual(1);
+    expect(value.segments).toEqual([
+      { interval: 7, count: 8 },
+      { interval: 6, count: 4 },
+    ]);
+    expect(value.segments.reduce((sum, segment) => sum + segment.interval * segment.count, 0)).toBe(80);
   });
 
   test('92 → 80 decreases', () => {
@@ -248,6 +306,13 @@ describe('calculators — increase/decrease distribution', () => {
     });
     expect(value.actionCount).toBe(12);
     expect(value.isIncrease).toBe(false);
+    expect(value.segments).toEqual([
+      { interval: 8, count: 8 },
+      { interval: 7, count: 4 },
+    ]);
+    expect(value.segments.reduce((sum, segment) => sum + segment.interval * segment.count, 0)).toBe(92);
+    expect(92 - value.actionCount).toBe(80);
+    expect(value.instruction).toContain('2 петель вместе');
   });
 
   test('100 → 110', () => {
@@ -282,6 +347,7 @@ describe('calculators — increase/decrease distribution', () => {
     });
     expect(value.actionCount).toBe(1);
     expect(value.segments).toEqual([{ interval: 10, count: 1 }]);
+    expect(value.instruction).toContain('в центре ряда');
   });
 
   test('large difference warns about single-row distribution', () => {
@@ -291,6 +357,13 @@ describe('calculators — increase/decrease distribution', () => {
     });
     expect(value.warning).not.toBeNull();
     expect(value.actionCount).toBe(30);
+    expect(value.segments).toEqual([]);
+  });
+
+  test('impossible ordinary single-row decreases warn instead of emitting instructions', () => {
+    const { value } = distributeIncreasesDecreases({ currentStitches: 10, targetStitches: 4 });
+    expect(value.warning).not.toBeNull();
+    expect(value.segments).toEqual([]);
   });
 });
 
@@ -342,5 +415,42 @@ describe('calculators — enough yarn', () => {
         requiredGrams: 400,
       })
     ).toThrow('Укажите вес мотка');
+  });
+
+  test.each([100, 300, 1001, 4999, 5000])('compares integer milliskeins exactly: %i', (need) => {
+    const { value } = checkYarnAvailability({ stockMilliskeins: 5000, requiredMilliskeins: need });
+    expect(value.differenceMilliskeins).toBe(5000 - need);
+    expect(value.enough).toBe(true);
+  });
+
+  test('rejects fractional milliskeins and multiple requirement modes', () => {
+    expect(() => checkYarnAvailability({ stockMilliskeins: 5000.1, requiredMilliskeins: 1000 })).toThrow();
+    expect(() => checkYarnAvailability({ stockMilliskeins: 5000, requiredMilliskeins: 1000, requiredGrams: 100 })).toThrow();
+  });
+
+  test('derives availability metadata from integer milliskeins deliberately', () => {
+    expect(calcTotalWeightG(4300, 100)).toBe(430);
+    expect(calcTotalLengthM(4300, 240)).toBe(1032);
+    expect(calcTotalWeightG(4300, null)).toBeNull();
+    expect(calcTotalLengthM(4300, null)).toBeNull();
+  });
+});
+
+describe('calculator numeric parser boundaries', () => {
+  test.each(['10', '10,5', '10.5', '0,3'])('accepts %s', (input) => {
+    expect(finalizeNumber(input)).not.toBeNull();
+  });
+
+  test.each(['10,5.2', '1,,2', 'abc', '--2', ',', '.', '   '])('rejects or empties %s', (input) => {
+    if (input.trim() === '') expect(finalizeNumber(input)).toBeNull();
+    else expect(() => finalizeNumber(input)).toThrow();
+  });
+
+  test('editable parser does not misclassify malformed mixed separators as incomplete', () => {
+    expect(() => parseFlexibleNumber('10,5.2')).toThrow();
+  });
+
+  test('price parser converts decimal comma directly to integer minor units', () => {
+    expect(parsePriceToMinor('350,50')).toBe(35050);
   });
 });

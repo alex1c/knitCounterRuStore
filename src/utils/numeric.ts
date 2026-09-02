@@ -28,9 +28,6 @@ export function parseFlexibleNumber(input: string): number | null {
   const normalized = trimmed.replace(',', '.');
 
   if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
-    if (/^-?\d+[.,]\d*[.,]?$/.test(trimmed) || /^-?[.,]\d*$/.test(trimmed)) {
-      return null;
-    }
     throw new Error(`Invalid number: ${input}`);
   }
 

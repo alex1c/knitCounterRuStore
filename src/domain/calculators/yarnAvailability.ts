@@ -10,7 +10,7 @@ import {
 } from '@/utils/yarnQuantity';
 import { applyReservePercent } from './rounding';
 import type { CalculatorResult } from './types';
-import { requireNonNegative, CalculatorValidationError } from './validation';
+import { requireFiniteResult, requireNonNegative, requirePositive, CalculatorValidationError } from './validation';
 
 export type YarnAvailabilityInput = {
   /** Stock on hand in milliskeins. */
@@ -41,40 +41,66 @@ export function checkYarnAvailability(
   input: YarnAvailabilityInput
 ): CalculatorResult<YarnAvailabilityResult> {
   const stock = requireNonNegative(input.stockMilliskeins, 'Остаток');
+  if (!Number.isSafeInteger(stock)) {
+    throw new CalculatorValidationError('Остаток должен быть целым количеством тысячных мотка');
+  }
   const reserve = requireNonNegative(input.reservePercent ?? 0, 'Запас');
+  const weightMetadata = input.weightPerSkeinG == null
+    ? null
+    : requirePositive(input.weightPerSkeinG, 'Вес мотка');
+  const lengthMetadata = input.lengthPerSkeinM == null
+    ? null
+    : requirePositive(input.lengthPerSkeinM, 'Метраж мотка');
+
+  const suppliedModes = [
+    input.requiredMilliskeins,
+    input.requiredGrams,
+    input.requiredMeters,
+  ].filter((value) => value != null).length;
+  if (suppliedModes !== 1) {
+    throw new CalculatorValidationError('Укажите нужное количество ровно в одной единице');
+  }
 
   let requiredMs: number;
   const explanation: string[] = [];
 
   if (input.requiredMilliskeins != null) {
-    requiredMs = Math.round(applyReservePercent(input.requiredMilliskeins, reserve));
+    const required = requireNonNegative(input.requiredMilliskeins, 'Нужное количество');
+    if (!Number.isSafeInteger(required)) {
+      throw new CalculatorValidationError('Количество должно быть целым числом тысячных мотка');
+    }
+    requiredMs = Math.round(requireFiniteResult(applyReservePercent(required, reserve)));
     explanation.push(
       `Нужно: ${formatSkeins(input.requiredMilliskeins)} × ${1 + reserve / 100} = ${formatSkeins(requiredMs)}`
     );
   } else if (input.requiredGrams != null) {
-    const weight = input.weightPerSkeinG;
-    if (weight == null || weight <= 0) {
+    const requiredGrams = requireNonNegative(input.requiredGrams, 'Нужный вес');
+    const weightValue = weightMetadata;
+    if (weightValue == null) {
       throw new CalculatorValidationError(
         'Укажите вес мотка для расчёта по граммам'
       );
     }
-    const withReserve = applyReservePercent(input.requiredGrams, reserve);
+    const weight = requirePositive(weightValue, 'Вес мотка');
+    const withReserve = applyReservePercent(requiredGrams, reserve);
     const skeins = withReserve / weight;
-    requiredMs = Math.round(skeins * MILLISKEINS_PER_SKEIN);
+    requiredMs = Math.round(requireFiniteResult(skeins * MILLISKEINS_PER_SKEIN));
     explanation.push(
       `${input.requiredGrams} г × ${1 + reserve / 100} = ${withReserve.toFixed(0)} г`,
       `≈ ${formatSkeins(requiredMs)}`
     );
   } else if (input.requiredMeters != null) {
-    const length = input.lengthPerSkeinM;
-    if (length == null || length <= 0) {
+    const requiredMeters = requireNonNegative(input.requiredMeters, 'Нужная длина');
+    const lengthValue = lengthMetadata;
+    if (lengthValue == null) {
       throw new CalculatorValidationError(
         'Укажите метраж мотка для расчёта по метрам'
       );
     }
-    const withReserve = applyReservePercent(input.requiredMeters, reserve);
+    const length = requirePositive(lengthValue, 'Метраж мотка');
+    const withReserve = applyReservePercent(requiredMeters, reserve);
     const skeins = withReserve / length;
-    requiredMs = Math.round(skeins * MILLISKEINS_PER_SKEIN);
+    requiredMs = Math.round(requireFiniteResult(skeins * MILLISKEINS_PER_SKEIN));
     explanation.push(
       `${input.requiredMeters} м × ${1 + reserve / 100} = ${withReserve.toFixed(0)} м`,
       `≈ ${formatSkeins(requiredMs)}`
@@ -83,7 +109,13 @@ export function checkYarnAvailability(
     throw new CalculatorValidationError('Укажите нужное количество');
   }
 
+  if (!Number.isSafeInteger(requiredMs)) {
+    throw new CalculatorValidationError('Нужное количество слишком велико');
+  }
   const diff = stock - requiredMs;
+  if (!Number.isSafeInteger(diff)) {
+    throw new CalculatorValidationError('Разница количества слишком велика');
+  }
   const enough = diff >= 0;
 
   explanation.push(`В наличии: ${formatSkeins(stock)}`);
@@ -94,8 +126,8 @@ export function checkYarnAvailability(
     explanation.push(`Не хватает: ≈ ${formatSkeins(Math.abs(diff))}`);
   }
 
-  const weight = input.weightPerSkeinG ?? null;
-  const length = input.lengthPerSkeinM ?? null;
+  const weight = weightMetadata;
+  const length = lengthMetadata;
 
   return {
     value: {

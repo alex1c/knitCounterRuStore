@@ -10,7 +10,7 @@ import {
   formatSkeinPurchase,
 } from './rounding';
 import type { CalculatorResult } from './types';
-import { requireNonNegative, requirePositive } from './validation';
+import { requireFiniteResult, requireNonNegative, requirePositive } from './validation';
 
 export type YarnFromGramsInput = {
   mode: 'grams';
@@ -45,9 +45,9 @@ export function calculateYarnRequirement(
   const reserve = requireNonNegative(input.reservePercent ?? 10, 'Запас');
 
   if (input.mode === 'grams') {
-    const required = requirePositive(input.requiredGrams, 'Нужный вес');
+    const required = requireNonNegative(input.requiredGrams, 'Нужный вес');
     const weight = requirePositive(input.weightPerSkeinG, 'Вес мотка');
-    const withReserve = applyReservePercent(required, reserve);
+    const withReserve = requireFiniteResult(applyReservePercent(required, reserve));
     const skeins = ceilSkeins(withReserve / weight);
     const withReserveMeters =
       input.lengthPerSkeinM != null
@@ -60,10 +60,7 @@ export function calculateYarnRequirement(
       `Покупаем целыми мотками → ${formatSkeinPurchase(skeins)}`,
     ];
 
-    const costMinor =
-      input.pricePerSkeinMinor != null
-        ? skeins * input.pricePerSkeinMinor
-        : null;
+    const costMinor = calculateCostMinor(skeins, input.pricePerSkeinMinor);
     if (costMinor != null) {
       explanation.push(`Стоимость: ${(costMinor / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽`);
     }
@@ -79,9 +76,9 @@ export function calculateYarnRequirement(
     };
   }
 
-  const requiredM = requirePositive(input.requiredMeters, 'Нужная длина');
+  const requiredM = requireNonNegative(input.requiredMeters, 'Нужная длина');
   const metersPerSkein = requirePositive(input.metersPerSkein, 'Метраж мотка');
-  const withReserveM = applyReservePercent(requiredM, reserve);
+  const withReserveM = requireFiniteResult(applyReservePercent(requiredM, reserve));
   const skeins = ceilSkeins(withReserveM / metersPerSkein);
 
   const explanation = [
@@ -90,8 +87,7 @@ export function calculateYarnRequirement(
     `Покупаем целыми мотками → ${formatSkeinPurchase(skeins)}`,
   ];
 
-  const costMinor =
-    input.pricePerSkeinMinor != null ? skeins * input.pricePerSkeinMinor : null;
+  const costMinor = calculateCostMinor(skeins, input.pricePerSkeinMinor);
 
   return {
     value: {
@@ -102,4 +98,14 @@ export function calculateYarnRequirement(
     },
     explanation,
   };
+}
+
+function calculateCostMinor(skeins: number, priceMinor: number | undefined): number | null {
+  if (priceMinor == null) return null;
+  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0) {
+    throw new Error('Цена должна быть неотрицательным целым количеством копеек');
+  }
+  const total = skeins * priceMinor;
+  if (!Number.isSafeInteger(total)) throw new Error('Стоимость слишком велика');
+  return total;
 }

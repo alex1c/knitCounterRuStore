@@ -27,8 +27,16 @@ export function requireNonNegative(value: number, label: string): number {
 
 /** Requires integer >= min (default 1). */
 export function requirePositiveInt(value: number, label: string, min = 1): number {
-  if (!Number.isInteger(value) || value < min) {
+  if (!Number.isSafeInteger(value) || value < min) {
     throw new CalculatorValidationError(`${label} должно быть целым числом ≥ ${min}`);
+  }
+  return value;
+}
+
+/** Rejects overflow/underflow results before they reach UI formatting or persistence. */
+export function requireFiniteResult(value: number, label = 'Результат'): number {
+  if (!Number.isFinite(value)) {
+    throw new CalculatorValidationError(`${label} слишком велик`);
   }
   return value;
 }

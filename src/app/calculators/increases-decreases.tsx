@@ -2,7 +2,7 @@
  * Calculator — increase/decrease distribution.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -19,6 +19,8 @@ export default function IncreasesDecreasesCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof distributeIncreasesDecreases>['value']
   >();
+
+  useEffect(() => clear(), [clear, current, target]);
 
   return (
     <CalculatorLayout

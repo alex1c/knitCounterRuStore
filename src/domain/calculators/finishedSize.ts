@@ -4,7 +4,7 @@
 
 import { formatCm } from './rounding';
 import type { CalculatorResult } from './types';
-import { requirePositive } from './validation';
+import { requireFiniteResult, requirePositive } from './validation';
 
 export type FinishedSizeInput = {
   stitchCount: number;
@@ -27,21 +27,20 @@ export function calculateFinishedSize(
   const gaugeStitches = requirePositive(input.gaugeStitches, 'Петли в образце');
   const gaugeWidth = requirePositive(input.gaugeWidthCm, 'Ширина образца');
 
-  const widthCm = (stitches * gaugeWidth) / gaugeStitches;
+  const widthCm = requireFiniteResult((stitches * gaugeWidth) / gaugeStitches);
   const explanation: string[] = [
     `${stitches} петель × ${formatCm(gaugeWidth)} / ${gaugeStitches} = ${formatCm(widthCm)}`,
   ];
 
   let heightCm: number | null = null;
-  if (
-    input.rowCount != null &&
-    input.gaugeRows != null &&
-    input.gaugeHeightCm != null
-  ) {
+  if (input.rowCount != null) {
+    if (input.gaugeRows == null || input.gaugeHeightCm == null) {
+      throw new Error('Для расчёта высоты укажите ряды и высоту образца');
+    }
     const rows = requirePositive(input.rowCount, 'Количество рядов');
     const gaugeRows = requirePositive(input.gaugeRows, 'Ряды в образце');
     const gaugeHeight = requirePositive(input.gaugeHeightCm, 'Высота образца');
-    heightCm = (rows * gaugeHeight) / gaugeRows;
+    heightCm = requireFiniteResult((rows * gaugeHeight) / gaugeRows);
     explanation.push(
       `${rows} рядов × ${formatCm(gaugeHeight)} / ${gaugeRows} = ${formatCm(heightCm)}`
     );

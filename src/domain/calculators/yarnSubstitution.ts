@@ -9,7 +9,7 @@ import {
   formatSkeinPurchase,
 } from './rounding';
 import type { CalculatorResult } from './types';
-import { requireNonNegative, requirePositive } from './validation';
+import { requireFiniteResult, requireNonNegative, requirePositive } from './validation';
 
 export type YarnSubstitutionInput = {
   originalSkeinCount?: number;
@@ -40,19 +40,19 @@ export function calculateYarnSubstitution(
 
   let requiredM: number;
   if (input.totalRequiredMeters != null) {
-    requiredM = requirePositive(input.totalRequiredMeters, 'Нужная длина');
+    requiredM = requireNonNegative(input.totalRequiredMeters, 'Нужная длина');
   } else if (
     input.originalSkeinCount != null &&
     input.originalMetersPerSkein != null
   ) {
-    const count = requirePositive(input.originalSkeinCount, 'Мотки по описанию');
+    const count = requireNonNegative(input.originalSkeinCount, 'Мотки по описанию');
     const origM = requirePositive(input.originalMetersPerSkein, 'Метраж мотка');
-    requiredM = count * origM;
+    requiredM = requireFiniteResult(count * origM);
   } else {
     throw new Error('Provide totalRequiredMeters or original skein count + meters');
   }
 
-  const withReserve = applyReservePercent(requiredM, reserve);
+  const withReserve = requireFiniteResult(applyReservePercent(requiredM, reserve));
   const skeins = ceilSkeins(withReserve / replacementM);
 
   const explanation: string[] = [];
@@ -75,10 +75,15 @@ export function calculateYarnSubstitution(
     );
   }
 
-  const costMinor =
-    input.replacementPricePerSkeinMinor != null
-      ? skeins * input.replacementPricePerSkeinMinor
-      : null;
+  let costMinor: number | null = null;
+  if (input.replacementPricePerSkeinMinor != null) {
+    const price = input.replacementPricePerSkeinMinor;
+    if (!Number.isSafeInteger(price) || price < 0) {
+      throw new Error('Цена должна быть неотрицательным целым количеством копеек');
+    }
+    costMinor = skeins * price;
+    if (!Number.isSafeInteger(costMinor)) throw new Error('Стоимость слишком велика');
+  }
 
   return {
     value: {

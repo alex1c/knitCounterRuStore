@@ -12,7 +12,11 @@ export function roundToNearestInt(value: number): number {
 /** Always round skein purchase counts up. */
 export function ceilSkeins(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.ceil(value - 1e-9);
+  const nearestInteger = Math.round(value);
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(value)) * 16;
+  return Math.abs(value - nearestInteger) <= tolerance
+    ? nearestInteger
+    : Math.ceil(value);
 }
 
 /** Apply reserve percentage (e.g. 10 → 10%). */

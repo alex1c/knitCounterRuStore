@@ -2,7 +2,7 @@
  * Calculator — yarn substitution by length.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -22,7 +22,7 @@ import {
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
 import { useDatabase } from '@/providers/DatabaseProvider';
-import { formatMoneyMinor } from '@/utils/yarnQuantity';
+import { formatMoneyMinor, parsePriceToMinor } from '@/utils/yarnQuantity';
 
 export default function YarnSubstitutionCalculator() {
   const { yarnRepository } = useDatabase();
@@ -36,6 +36,8 @@ export default function YarnSubstitutionCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateYarnSubstitution>['value']
   >();
+
+  useEffect(() => clear(), [clear, origSkeins, origMeters, replMeters, replWeight, reserve, price]);
 
   const pickYarn = (yarn: Yarn) => {
     if (yarn.lengthPerSkeinM) setReplMeters(String(yarn.lengthPerSkeinM));
@@ -61,7 +63,7 @@ export default function YarnSubstitutionCalculator() {
               replacementPricePerSkeinMinor:
                 price.trim() === ''
                   ? undefined
-                  : Math.round(parseRequiredNumber(price, 'цену') * 100),
+                  : parsePriceToMinor(price) ?? undefined,
             })
           )
         }

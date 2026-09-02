@@ -3,7 +3,7 @@
  */
 
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -35,15 +35,16 @@ const UNIT_OPTIONS = [
 type UnitMode = (typeof UNIT_OPTIONS)[number]['value'];
 
 function resolveProjectYarnSeed(
+  projectId: string | undefined,
   linkId: string | undefined,
   projectYarnRepository: ReturnType<typeof useDatabase>['projectYarnRepository'],
   yarnRepository: ReturnType<typeof useDatabase>['yarnRepository']
 ): { yarn: Yarn | null; required: string } {
-  if (!linkId || !projectYarnRepository || !yarnRepository) {
+  if (!projectId || !linkId || !projectYarnRepository || !yarnRepository) {
     return { yarn: null, required: '4,3' };
   }
   const link = projectYarnRepository.getLinkById(linkId);
-  if (!link) return { yarn: null, required: '4,3' };
+  if (!link || link.projectId !== projectId) return { yarn: null, required: '4,3' };
   const yarn = yarnRepository.getYarnById(link.yarnId);
   if (!yarn) return { yarn: null, required: '4,3' };
   const required =
@@ -59,7 +60,7 @@ export default function YarnEnoughCalculator() {
     linkId?: string;
   }>();
   const { yarnRepository, projectYarnRepository } = useDatabase();
-  const seed = resolveProjectYarnSeed(linkId, projectYarnRepository, yarnRepository);
+  const seed = resolveProjectYarnSeed(projectId, linkId, projectYarnRepository, yarnRepository);
   const [unit, setUnit] = useState<UnitMode>('skeins');
   const [required, setRequired] = useState(seed.required);
   const [reserve, setReserve] = useState('0');
@@ -69,11 +70,18 @@ export default function YarnEnoughCalculator() {
     ReturnType<typeof checkYarnAvailability>['value']
   >();
 
-  const pickYarn = (yarn: Yarn) => setSelectedYarn(yarn);
+  useEffect(() => clear(), [clear, unit, required, reserve, selectedYarn]);
+
+  const pickYarn = (yarn: Yarn) => {
+    clear();
+    setSelectedYarn(yarn);
+  };
 
   const savePlanned = () => {
-    if (!projectId || !linkId || !projectYarnRepository || !result) return;
+    if (!projectId || !linkId || !projectYarnRepository || !result || !selectedYarn) return;
     try {
+      const link = projectYarnRepository.getLinkById(linkId);
+      if (!link || link.projectId !== projectId || link.yarnId !== selectedYarn.id) return;
       projectYarnRepository.setPlannedQuantityMilliskeins(
         linkId,
         result.requiredMilliskeins
@@ -162,10 +170,10 @@ export default function YarnEnoughCalculator() {
           label="Единица"
           options={UNIT_OPTIONS}
           value={unit}
-          onChange={(value) => setUnit(value)}
+          onChange={(value) => { clear(); setUnit(value); }}
         />
-        <FormField label="Нужно" value={required} onChangeText={setRequired} keyboardType="numeric" />
-        <ReserveField value={reserve} onChange={setReserve} />
+        <FormField label="Нужно" value={required} onChangeText={(value) => { clear(); setRequired(value); }} keyboardType="numeric" />
+        <ReserveField value={reserve} onChange={(value) => { clear(); setReserve(value); }} />
       </CalculatorLayout>
       <YarnPickerModal
         visible={pickerVisible}

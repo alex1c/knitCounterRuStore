@@ -49,12 +49,13 @@ export function distributeIncreasesDecreases(
   const actionCount = Math.abs(target - current);
   let warning: string | null = null;
 
-  if (actionCount > current) {
+  const impossibleStandardDecrease = !isIncrease && actionCount > Math.floor(current / 2);
+  if (actionCount > current || impossibleStandardDecrease) {
     warning =
-      'Слишком много изменений для равномерного распределения в одном ряду. Рассмотрите несколько рядов.';
+      'Нельзя выполнить это изменение обычными одиночными прибавками/убавками в одном ряду. Распределите изменения по нескольким рядам или используйте другой способ.';
   }
 
-  const segments = buildSegments(current, actionCount);
+  const segments = warning ? [] : buildSegments(current, actionCount);
   const verb = isIncrease ? 'Прибавить' : 'Убавить';
   const instruction = formatInstruction(verb, actionCount, segments);
 
@@ -109,10 +110,19 @@ function formatInstruction(
     return `${verb} ${actionCount} петель примерно равномерно по ряду`;
   }
 
-  const parts = segments.map(
-    (s) => `${s.count} раз через ${s.interval} ${petleyWord(s.interval)}`
-  );
-  return `${verb} ${actionCount} петель: ${parts.join(' и ')}`;
+  if (actionCount === 1) {
+    return `${verb} 1 петлю примерно в центре ряда`;
+  }
+
+  const parts = segments.map((s) => `${s.count} ${intervalWord(s.count)} по ${s.interval} ${petleyWord(s.interval)}`);
+  const meaning = verb === 'Убавить'
+    ? 'каждый участок заканчивается провязыванием 2 петель вместе'
+    : 'после каждого участка выполнить 1 прибавку';
+  return `${verb} ${actionCount} петель равномерно: ${parts.join(' и ')}; ${meaning}`;
+}
+
+function intervalWord(count: number): string {
+  return count === 1 ? 'участок' : count >= 2 && count <= 4 ? 'участка' : 'участков';
 }
 
 function petleyWord(n: number): string {

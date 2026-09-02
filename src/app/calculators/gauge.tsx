@@ -2,7 +2,7 @@
  * Calculator — knitting gauge density.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import {
@@ -22,6 +22,8 @@ export default function GaugeCalculator() {
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateGauge>['value']
   >();
+
+  useEffect(() => clear(), [clear, width, height, stitches, rows]);
 
   return (
     <CalculatorLayout
