@@ -8,6 +8,7 @@ import { migration002CounterPartIntegrity } from './002_counter_part_integrity';
 import { migration003RowRulesAndTimer } from './003_row_rules_and_timer';
 import { migration004YarnInventory } from './004_yarn_inventory';
 import { migration005ProjectDocuments } from './005_project_documents';
+import { migration006ProjectDiary } from './006_project_diary';
 import type { Migration } from '../types';
 
 export const MIGRATIONS: readonly Migration[] = [
@@ -16,6 +17,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration003RowRulesAndTimer,
   migration004YarnInventory,
   migration005ProjectDocuments,
+  migration006ProjectDiary,
 ];
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;

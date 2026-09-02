@@ -504,6 +504,19 @@ export default function ProjectDetailScreen() {
         </Card>
       </View>
 
+      <View style={styles.linkRow}>
+        <Button
+          title="Дневник"
+          variant="secondary"
+          onPress={() => router.push(`/project/diary/${project.id}`)}
+        />
+        <Button
+          title="Статистика"
+          variant="secondary"
+          onPress={() => router.push(`/project/statistics/${project.id}`)}
+        />
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Пряжа</Text>
         {projectYarns.map((link) => {
@@ -732,6 +745,11 @@ const styles = StyleSheet.create({
   meta: { ...typography.body, color: colors.textSecondary },
   notes: { ...typography.caption, color: colors.textMuted },
   section: { gap: spacing.sm, marginTop: spacing.lg },
+  linkRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
   sectionTitle: { ...typography.subtitle, color: colors.text },
   sectionMeta: { ...typography.caption, color: colors.textMuted },
   ruleCard: { gap: spacing.xs },

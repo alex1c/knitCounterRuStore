@@ -36,3 +36,7 @@ export type CounterLinkType = (typeof COUNTER_LINK_TYPES)[number];
 /** Stored document type codes for project attachments. */
 export const PROJECT_DOCUMENT_TYPES = ['pdf', 'image', 'other'] as const;
 export type ProjectDocumentType = (typeof PROJECT_DOCUMENT_TYPES)[number];
+
+/** Manual project diary entry types stored in project_diary_entries. */
+export const DIARY_ENTRY_TYPES = ['note', 'milestone'] as const;
+export type DiaryEntryType = (typeof DIARY_ENTRY_TYPES)[number];

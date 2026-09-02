@@ -132,6 +132,66 @@ export class KnittingSessionRepository {
     }
   }
 
+  /** Sum of completed session durations only (excludes active elapsed). */
+  getCompletedDurationSeconds(projectId: string): number {
+    try {
+      const row = this.db.getFirst<{ total: number | null }>(
+        `SELECT COALESCE(SUM(duration_seconds), 0) AS total
+         FROM knitting_sessions
+         WHERE project_id = ? AND is_active = 0 AND duration_seconds IS NOT NULL`,
+        [projectId]
+      );
+      return Math.max(0, row?.total ?? 0);
+    } catch (err) {
+      throw new StorageError('Failed to get completed duration', err);
+    }
+  }
+
+  /** Completed sessions ordered by start time descending. */
+  listCompletedSessions(projectId: string, limit = 100): KnittingSession[] {
+    try {
+      const rows = this.db.getAll<SessionRow>(
+        `SELECT * FROM knitting_sessions
+         WHERE project_id = ? AND is_active = 0 AND ended_at IS NOT NULL
+         ORDER BY started_at DESC
+         LIMIT ?`,
+        [projectId, limit]
+      );
+      return rows.map(mapSession);
+    } catch (err) {
+      throw new StorageError('Failed to list completed sessions', err);
+    }
+  }
+
+  /** All sessions for chart aggregation (includes active). */
+  listSessionsForProject(projectId: string, limit = 200): KnittingSession[] {
+    try {
+      const rows = this.db.getAll<SessionRow>(
+        `SELECT * FROM knitting_sessions
+         WHERE project_id = ?
+         ORDER BY started_at DESC
+         LIMIT ?`,
+        [projectId, limit]
+      );
+      return rows.map(mapSession);
+    } catch (err) {
+      throw new StorageError('Failed to list sessions', err);
+    }
+  }
+
+  countCompletedSessions(projectId: string): number {
+    try {
+      const row = this.db.getFirst<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM knitting_sessions
+         WHERE project_id = ? AND is_active = 0 AND ended_at IS NOT NULL`,
+        [projectId]
+      );
+      return row?.count ?? 0;
+    } catch (err) {
+      throw new StorageError('Failed to count sessions', err);
+    }
+  }
+
   private validatePartScope(projectId: string, projectPartId: string | null): void {
     if (projectPartId == null) return;
     const part = this.db.getFirst<{ project_id: string }>(

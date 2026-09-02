@@ -315,6 +315,58 @@ export class CounterRepository {
   }
 
   /**
+   * Manual (non-linked) counter events for a project, oldest first.
+   * Used for diary aggregation and statistics — excludes derived counters.
+   */
+  listManualEventsForProject(projectId: string, limit = 5000): CounterEvent[] {
+    try {
+      const rows = this.db.getAll<CounterEventRow>(
+        `SELECT ce.*
+         FROM counter_events ce
+         INNER JOIN counters c ON c.id = ce.counter_id
+         WHERE c.project_id = ?
+           AND c.parent_counter_id IS NULL
+           AND (c.link_type IS NULL OR c.link_type = '')
+         ORDER BY ce.created_at ASC
+         LIMIT ?`,
+        [projectId, limit]
+      );
+      return rows.map(mapCounterEvent);
+    } catch (err) {
+      throw new StorageError('Failed to list project counter events', err);
+    }
+  }
+
+  /** Manual counter events with counter metadata for aggregation. */
+  listManualEventSlicesForProject(
+    projectId: string,
+    limit = 5000
+  ): (CounterEvent & { counterName: string; isPrimary: boolean })[] {
+    try {
+      const rows = this.db.getAll<
+        CounterEventRow & { counter_name: string; is_primary: number }
+      >(
+        `SELECT ce.*, c.name AS counter_name, c.is_primary
+         FROM counter_events ce
+         INNER JOIN counters c ON c.id = ce.counter_id
+         WHERE c.project_id = ?
+           AND c.parent_counter_id IS NULL
+           AND (c.link_type IS NULL OR c.link_type = '')
+         ORDER BY ce.created_at ASC
+         LIMIT ?`,
+        [projectId, limit]
+      );
+      return rows.map((row) => ({
+        ...mapCounterEvent(row),
+        counterName: row.counter_name,
+        isPrimary: row.is_primary === 1,
+      }));
+    } catch (err) {
+      throw new StorageError('Failed to list project counter event slices', err);
+    }
+  }
+
+  /**
    * Undoes the most recent value change by restoring previous_value.
    * Appends a new `set` event — history is never silently deleted.
    */

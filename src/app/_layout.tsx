@@ -55,6 +55,14 @@ export default function RootLayout() {
               options={{ headerShown: false, presentation: 'modal' }}
             />
             <Stack.Screen
+              name="project/diary/[id]"
+              options={{ title: 'Дневник проекта' }}
+            />
+            <Stack.Screen
+              name="project/statistics/[id]"
+              options={{ title: 'Статистика' }}
+            />
+            <Stack.Screen
               name="project/rules/form"
               options={{ title: 'Действия по рядам', presentation: 'modal' }}
             />

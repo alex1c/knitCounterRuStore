@@ -6,6 +6,7 @@ import type {
   CounterEventType,
   CounterLinkType,
   CraftType,
+  DiaryEntryType,
   ProjectDocumentType,
   ProjectStatus,
   RowRuleType,
@@ -139,4 +140,77 @@ export type ProjectDocument = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+};
+
+/** User-authored diary note stored in project_diary_entries. */
+export type ProjectDiaryEntry = {
+  id: string;
+  projectId: string;
+  type: DiaryEntryType;
+  title: string | null;
+  text: string;
+  occurredAt: string;
+  documentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Derived activity timeline item kinds — not persisted separately. */
+export type ActivityKind =
+  | 'note'
+  | 'milestone'
+  | 'session'
+  | 'counter_summary'
+  | 'yarn_attached'
+  | 'document_added'
+  | 'active_session';
+
+/** Filter tabs for the project diary timeline. */
+export type DiaryFilter = 'all' | 'notes' | 'knitting' | 'yarn';
+
+/** Single row in the reverse-chronological project activity feed. */
+export type ActivityTimelineItem = {
+  id: string;
+  kind: ActivityKind;
+  occurredAt: string;
+  primaryText: string;
+  secondaryText?: string;
+};
+
+/** Date-grouped section in the diary timeline. */
+export type ActivityDayGroup = {
+  dateKey: string;
+  label: string;
+  items: ActivityTimelineItem[];
+};
+
+/** Per-yarn usage line for project statistics. */
+export type ProjectYarnStat = {
+  yarnId: string;
+  yarnName: string;
+  usedMilliskeins: number;
+  plannedMilliskeins: number | null;
+};
+
+/** One bar in the daily knitting-time chart. */
+export type DailyKnittingMinutes = {
+  dateKey: string;
+  label: string;
+  minutes: number;
+};
+
+/** Aggregated project statistics view model. */
+export type ProjectStatistics = {
+  hasData: boolean;
+  totalKnittingSeconds: number;
+  activeSessionElapsedSeconds: number | null;
+  completedSessionCount: number;
+  averageSessionSeconds: number | null;
+  currentPrimaryRow: number | null;
+  maxRowReached: number | null;
+  projectAgeDays: number;
+  projectCreatedLabel: string;
+  yarns: ProjectYarnStat[];
+  dailyMinutes: DailyKnittingMinutes[];
+  recentActivityAt: string | null;
 };

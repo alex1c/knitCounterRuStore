@@ -23,6 +23,7 @@ import { RowRuleRepository } from '@/repositories/RowRuleRepository';
 import { KnittingSessionRepository } from '@/repositories/KnittingSessionRepository';
 import { ProjectYarnRepository } from '@/repositories/ProjectYarnRepository';
 import { ProjectDocumentRepository } from '@/repositories/ProjectDocumentRepository';
+import { ProjectDiaryEntryRepository } from '@/repositories/ProjectDiaryEntryRepository';
 import { YarnRepository } from '@/repositories/YarnRepository';
 import { ProjectService } from '@/services/ProjectService';
 import { ProjectDocumentService } from '@/services/ProjectDocumentService';
@@ -41,6 +42,7 @@ export type DatabaseContextValue = {
   yarnRepository: YarnRepository | null;
   projectYarnRepository: ProjectYarnRepository | null;
   projectDocumentRepository: ProjectDocumentRepository | null;
+  projectDiaryEntryRepository: ProjectDiaryEntryRepository | null;
   projectDocumentService: ProjectDocumentService | null;
   yarnUsageService: YarnUsageService | null;
   projectService: ProjectService | null;
@@ -101,6 +103,7 @@ export function DatabaseProvider({ children }: Props) {
         yarnRepository: null,
         projectYarnRepository: null,
         projectDocumentRepository: null,
+        projectDiaryEntryRepository: null,
         projectDocumentService: null,
         yarnUsageService: null,
         projectService: null,
@@ -120,6 +123,7 @@ export function DatabaseProvider({ children }: Props) {
       yarnRepository: new YarnRepository(db),
       projectYarnRepository: new ProjectYarnRepository(db),
       projectDocumentRepository: new ProjectDocumentRepository(db),
+      projectDiaryEntryRepository: new ProjectDiaryEntryRepository(db),
       projectDocumentService: new ProjectDocumentService(db),
       yarnUsageService: new YarnUsageService(db),
       projectService: new ProjectService(db),

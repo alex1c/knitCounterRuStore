@@ -12,6 +12,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useProjectList } from '@/hooks/useProjectList';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useDatabase } from '@/providers/DatabaseProvider';
+import { ProjectStatisticsService } from '@/services/ProjectStatisticsService';
 import { formatNextRuleHint, getNextRuleOccurrence } from '@/domain/rowRuleEngine';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { formatYarnTitle } from '@/utils/yarnDisplay';
@@ -25,6 +27,7 @@ function ActiveProjectCard({
   onContinue: () => void;
 }) {
   const { detail } = useProjectDetail(projectId);
+  const { db } = useDatabase();
   if (!detail) return null;
 
   const primaryCounter =
@@ -45,7 +48,17 @@ function ActiveProjectCard({
     detail.projectYarns.length > 0
       ? `Пряжа: ${formatYarnTitle(detail.projectYarns[0].yarn)}`
       : null;
-  const subtitle = ruleHint ?? yarnHint ?? undefined;
+
+  let todayHint: string | null = null;
+  if (db && primaryCounter) {
+    const statsService = new ProjectStatisticsService(db);
+    const todaySeconds = statsService.getTodayKnittingSeconds(projectId);
+    if (todaySeconds >= 60) {
+      todayHint = `Сегодня: ${Math.round(todaySeconds / 60)} мин · ряд ${primaryCounter.currentValue}`;
+    }
+  }
+
+  const subtitle = todayHint ?? ruleHint ?? yarnHint ?? undefined;
 
   return (
     <ProjectCard
