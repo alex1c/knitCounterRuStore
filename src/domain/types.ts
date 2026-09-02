@@ -94,3 +94,34 @@ export type AppSetting = {
   value: string;
   updatedAt: string;
 };
+
+/** Personal yarn inventory item. Quantity stored as milliskeins (1 skein = 1000). */
+export type Yarn = {
+  id: string;
+  brand: string | null;
+  name: string;
+  colorName: string | null;
+  colorCode: string | null;
+  dyeLot: string | null;
+  composition: string | null;
+  weightPerSkeinG: number | null;
+  lengthPerSkeinM: number | null;
+  quantityMilliskeins: number;
+  purchasePriceMinor: number | null;
+  currency: string;
+  notes: string | null;
+  photoUri: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Join between a project and yarn from personal inventory. */
+export type ProjectYarn = {
+  id: string;
+  projectId: string;
+  yarnId: string;
+  plannedQuantityMilliskeins: number | null;
+  usedQuantityMilliskeins: number;
+  createdAt: string;
+  updatedAt: string;
+};

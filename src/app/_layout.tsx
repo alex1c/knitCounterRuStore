@@ -54,6 +54,14 @@ export default function RootLayout() {
               name="project/rules/form"
               options={{ title: 'Действия по рядам', presentation: 'modal' }}
             />
+            <Stack.Screen
+              name="yarn/form"
+              options={{ title: 'Пряжа', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="yarn/[id]"
+              options={{ title: 'Пряжа' }}
+            />
           </Stack>
         </DatabaseGate>
       </ThemeProvider>

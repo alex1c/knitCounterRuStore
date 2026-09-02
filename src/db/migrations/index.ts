@@ -6,12 +6,14 @@
 import { migration001Initial } from './001_initial';
 import { migration002CounterPartIntegrity } from './002_counter_part_integrity';
 import { migration003RowRulesAndTimer } from './003_row_rules_and_timer';
+import { migration004YarnInventory } from './004_yarn_inventory';
 import type { Migration } from '../types';
 
 export const MIGRATIONS: readonly Migration[] = [
   migration001Initial,
   migration002CounterPartIntegrity,
   migration003RowRulesAndTimer,
+  migration004YarnInventory,
 ];
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;

@@ -14,6 +14,7 @@ import { useProjectList } from '@/hooks/useProjectList';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { formatNextRuleHint, getNextRuleOccurrence } from '@/domain/rowRuleEngine';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { formatYarnTitle } from '@/utils/yarnDisplay';
 import { getActiveProjects } from '@/utils/projectSort';
 
 function ActiveProjectCard({
@@ -40,13 +41,18 @@ function ActiveProjectCard({
       ? getNextRuleOccurrence(primaryRules, primaryCounter.currentValue)
       : null;
   const ruleHint = nextRule ? formatNextRuleHint(nextRule) : null;
+  const yarnHint =
+    detail.projectYarns.length > 0
+      ? `Пряжа: ${formatYarnTitle(detail.projectYarns[0].yarn)}`
+      : null;
+  const subtitle = ruleHint ?? yarnHint ?? undefined;
 
   return (
     <ProjectCard
       project={detail.project}
       primaryCounter={primaryCounter}
       activePart={activePart}
-      subtitle={ruleHint ?? undefined}
+      subtitle={subtitle}
       onPress={() => router.push(`/project/${projectId}`)}
       actionLabel="Продолжить вязание"
       onAction={onContinue}

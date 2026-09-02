@@ -7,7 +7,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -27,7 +29,8 @@ import {
   getNextRuleOccurrence,
 } from '@/domain/rowRuleEngine';
 import type { Counter, ProjectPart, RowRule } from '@/domain/types';
-import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { parseSkeinQuantityInput } from '@/domain/yarnValidation';
+import { useProjectDetail, type ProjectYarnDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
 import { formatDuration } from '@/repositories/KnittingSessionRepository';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
@@ -37,6 +40,8 @@ import {
   formatRepeatProgress,
   isLinkedCounter,
 } from '@/utils/counterDisplay';
+import { formatYarnColorLine, formatYarnTitle } from '@/utils/yarnDisplay';
+import { formatSkeinQuantity, milliskeinsToSkeins } from '@/utils/yarnQuantity';
 
 type PromptState = {
   title: string;
@@ -48,11 +53,12 @@ type PromptState = {
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { detail, loading, reload } = useProjectDetail(id);
-  const { projectPartRepository, counterRepository, projectRepository, rowRuleRepository } =
+  const { projectPartRepository, counterRepository, projectRepository, rowRuleRepository, projectYarnRepository, yarnRepository, yarnUsageService } =
     useDatabase();
   const [newPartName, setNewPartName] = useState('');
   const [newCounterName, setNewCounterName] = useState('');
   const [prompt, setPrompt] = useState<PromptState | null>(null);
+  const [attachVisible, setAttachVisible] = useState(false);
 
   const showPrompt = (state: PromptState) => setPrompt(state);
   const closePrompt = () => setPrompt(null);
@@ -65,7 +71,7 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const { project, parts, counters, rules, totalKnittingSeconds, activeRuleCount } = detail;
+  const { project, parts, counters, rules, projectYarns, totalKnittingSeconds, activeRuleCount } = detail;
   const primaryCounter = counters.find((c) => c.isPrimary) ?? counters[0];
 
   const primaryRules = rules.filter(
@@ -247,6 +253,81 @@ export default function ProjectDetailScreen() {
     ]);
   };
 
+  const availableYarns =
+    yarnRepository?.listYarns().filter(
+      (y) => !projectYarns.some((link) => link.yarnId === y.id)
+    ) ?? [];
+
+  const handleAttachYarn = (yarnId: string) => {
+    if (!projectYarnRepository) return;
+    try {
+      projectYarnRepository.attachYarn(project.id, yarnId);
+      setAttachVisible(false);
+      reload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось добавить';
+      Alert.alert('Ошибка', message);
+    }
+  };
+
+  const handleDetachYarn = (link: ProjectYarnDetail) => {
+    Alert.alert(
+      'Убрать пряжу из проекта?',
+      formatYarnTitle(link.yarn),
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Убрать',
+          style: 'destructive',
+          onPress: () => {
+            projectYarnRepository?.detachYarn(link.id);
+            reload();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRecordUsage = (link: ProjectYarnDetail) => {
+    showPrompt({
+      title: 'Добавить расход',
+      defaultValue: '0,3',
+      keyboardType: 'numeric',
+      onSubmit: (text) => {
+        closePrompt();
+        if (!yarnUsageService) return;
+        try {
+          const amount = parseSkeinQuantityInput(text);
+          yarnUsageService.recordUsage(link.id, amount);
+          reload();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Не удалось списать';
+          Alert.alert('Ошибка', message);
+        }
+      },
+    });
+  };
+
+  const handleCorrectUsage = (link: ProjectYarnDetail) => {
+    showPrompt({
+      title: 'Использовано, мотков',
+      defaultValue: String(milliskeinsToSkeins(link.usedQuantityMilliskeins)),
+      keyboardType: 'numeric',
+      onSubmit: (text) => {
+        closePrompt();
+        if (!yarnUsageService) return;
+        try {
+          const newUsed = parseSkeinQuantityInput(text);
+          yarnUsageService.adjustUsedQuantity(link.id, newUsed);
+          reload();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Не удалось изменить';
+          Alert.alert('Ошибка', message);
+        }
+      },
+    });
+  };
+
   const handleDeleteCounter = (counter: Counter) => {
     const eventCount = counterRepository?.countEventsByCounter(counter.id) ?? 0;
     const message =
@@ -282,6 +363,29 @@ export default function ProjectDetailScreen() {
         onCancel={closePrompt}
         onSubmit={(v) => prompt?.onSubmit(v)}
       />
+
+      <Modal visible={attachVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Выберите пряжу</Text>
+            <ScrollView style={styles.modalList}>
+              {availableYarns.map((yarn) => (
+                <Pressable
+                  key={yarn.id}
+                  style={styles.modalItem}
+                  onPress={() => handleAttachYarn(yarn.id)}
+                >
+                  <Text style={styles.modalItemTitle}>{formatYarnTitle(yarn)}</Text>
+                  {formatYarnColorLine(yarn) ? (
+                    <Text style={styles.counterMeta}>{formatYarnColorLine(yarn)}</Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Button title="Отмена" variant="ghost" onPress={() => setAttachVisible(false)} />
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.header}>
         <Text style={styles.title}>{project.name}</Text>
@@ -371,6 +475,67 @@ export default function ProjectDetailScreen() {
             Всего: {formatDuration(totalKnittingSeconds)}
           </Text>
         </Card>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Пряжа</Text>
+        {projectYarns.map((link) => {
+          const colorLine = formatYarnColorLine(link.yarn);
+          return (
+            <Card key={link.id} style={styles.yarnCard}>
+              <Pressable onPress={() => router.push(`/yarn/${link.yarnId}`)}>
+                <Text style={styles.yarnTitle}>{formatYarnTitle(link.yarn)}</Text>
+                {colorLine ? (
+                  <Text style={styles.counterMeta}>{colorLine}</Text>
+                ) : null}
+                <Text style={styles.yarnUsed}>
+                  Использовано: {formatSkeinQuantity(link.usedQuantityMilliskeins)}
+                </Text>
+                <Text style={styles.counterMeta}>
+                  На складе: {formatSkeinQuantity(link.yarn.quantityMilliskeins)}
+                </Text>
+              </Pressable>
+              <View style={styles.yarnActions}>
+                <Button
+                  title="Расход"
+                  variant="ghost"
+                  onPress={() => handleRecordUsage(link)}
+                />
+                <Button
+                  title="Исправить"
+                  variant="ghost"
+                  onPress={() => handleCorrectUsage(link)}
+                />
+                <Button
+                  title="Убрать"
+                  variant="ghost"
+                  onPress={() => handleDetachYarn(link)}
+                />
+              </View>
+            </Card>
+          );
+        })}
+        <Button
+          title="Добавить пряжу"
+          variant="secondary"
+          onPress={() => {
+            if (availableYarns.length === 0) {
+              Alert.alert(
+                'Нет пряжи',
+                'Сначала добавьте пряжу в разделе «Пряжа».',
+                [
+                  { text: 'Отмена', style: 'cancel' },
+                  {
+                    text: 'Добавить',
+                    onPress: () => router.push('/yarn/form'),
+                  },
+                ]
+              );
+              return;
+            }
+            setAttachVisible(true);
+          }}
+        />
       </View>
 
       <View style={styles.section}>
@@ -527,6 +692,31 @@ const styles = StyleSheet.create({
   ruleText: { ...typography.body, color: colors.text, flex: 1 },
   ruleInactive: { color: colors.textMuted, textDecorationLine: 'line-through' },
   timerTotal: { ...typography.subtitle, color: colors.text },
+  yarnCard: { gap: spacing.sm },
+  yarnTitle: { ...typography.body, fontWeight: '600', color: colors.text },
+  yarnUsed: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  yarnActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    padding: spacing.lg,
+    maxHeight: '70%',
+    gap: spacing.md,
+  },
+  modalTitle: { ...typography.subtitle, color: colors.text },
+  modalList: { maxHeight: 320 },
+  modalItem: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalItemTitle: { ...typography.body, color: colors.text },
   rowCard: {
     flexDirection: 'row',
     alignItems: 'center',
