@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -14,10 +13,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { LocalPdfViewer } from '@/components/documents/LocalPdfViewer';
 import { useDatabase } from '@/providers/DatabaseProvider';
 import { colors, spacing, typography } from '@/theme/tokens';
 
@@ -94,20 +93,7 @@ export default function ProjectDocumentViewerScreen() {
       </View>
 
       {document.type === 'pdf' ? (
-        <WebView
-          key={document.fileUri}
-          source={{ uri: document.fileUri }}
-          style={styles.viewer}
-          originWhitelist={['*']}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          )}
-          onError={() => setMissingFile(true)}
-          onHttpError={() => setMissingFile(true)}
-        />
+        <LocalPdfViewer fileUri={document.fileUri} onLoadError={() => setMissingFile(true)} />
       ) : (
         <ScrollView contentContainerStyle={styles.imageScroll}>
           <Image
@@ -155,9 +141,4 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   message: { ...typography.body, color: colors.textSecondary, textAlign: 'center' },
-  loadingWrap: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
