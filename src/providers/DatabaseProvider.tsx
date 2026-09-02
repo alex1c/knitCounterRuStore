@@ -33,6 +33,10 @@ export type DatabaseContextValue = {
   ready: boolean;
   error: string | null;
   db: SqlDatabase | null;
+  /** Increments after replace-restore so screens can drop stale in-memory state. */
+  dataEpoch: number;
+  /** Call after backup restore replaces all user data. */
+  notifyDataReset: () => void;
   projectRepository: ProjectRepository | null;
   projectPartRepository: ProjectPartRepository | null;
   counterRepository: CounterRepository | null;
@@ -60,6 +64,7 @@ type Props = {
 export function DatabaseProvider({ children }: Props) {
   const [db, setDb] = useState<SqlDatabase | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataEpoch, setDataEpoch] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,12 +93,21 @@ export function DatabaseProvider({ children }: Props) {
     };
   }, []);
 
+  const notifyDataReset = useMemo(
+    () => () => {
+      setDataEpoch((v) => v + 1);
+    },
+    []
+  );
+
   const value = useMemo<DatabaseContextValue>(() => {
     if (!db) {
       return {
         ready: false,
         error,
         db: null,
+        dataEpoch,
+        notifyDataReset,
         projectRepository: null,
         projectPartRepository: null,
         counterRepository: null,
@@ -114,6 +128,9 @@ export function DatabaseProvider({ children }: Props) {
       ready: true,
       error: null,
       db,
+      dataEpoch,
+      notifyDataReset,
+      // Recreate repositories when dataEpoch changes after restore
       projectRepository: new ProjectRepository(db),
       projectPartRepository: new ProjectPartRepository(db),
       counterRepository: new CounterRepository(db),
@@ -128,7 +145,7 @@ export function DatabaseProvider({ children }: Props) {
       yarnUsageService: new YarnUsageService(db),
       projectService: new ProjectService(db),
     };
-  }, [db, error]);
+  }, [db, error, dataEpoch, notifyDataReset]);
 
   return (
     <DatabaseContext.Provider value={value}>{children}</DatabaseContext.Provider>
