@@ -328,6 +328,32 @@ export default function ProjectDetailScreen() {
     });
   };
 
+  const handleSetPlannedQuantity = (link: ProjectYarnDetail) => {
+    const defaultValue =
+      link.plannedQuantityMilliskeins != null
+        ? String(milliskeinsToSkeins(link.plannedQuantityMilliskeins))
+        : '';
+    showPrompt({
+      title: 'Планируется использовать, мотков',
+      defaultValue,
+      keyboardType: 'numeric',
+      onSubmit: (text) => {
+        closePrompt();
+        if (!projectYarnRepository) return;
+        try {
+          const trimmed = text.trim();
+          const planned =
+            trimmed === '' ? null : parseSkeinQuantityInput(trimmed);
+          projectYarnRepository.setPlannedQuantityMilliskeins(link.id, planned);
+          reload();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Не удалось сохранить';
+          Alert.alert('Ошибка', message);
+        }
+      },
+    });
+  };
+
   const handleDeleteCounter = (counter: Counter) => {
     const eventCount = counterRepository?.countEventsByCounter(counter.id) ?? 0;
     const message =
@@ -491,6 +517,11 @@ export default function ProjectDetailScreen() {
                 <Text style={styles.yarnUsed}>
                   Использовано: {formatSkeinQuantity(link.usedQuantityMilliskeins)}
                 </Text>
+                {link.plannedQuantityMilliskeins != null ? (
+                  <Text style={styles.counterMeta}>
+                    Планируется: {formatSkeinQuantity(link.plannedQuantityMilliskeins)}
+                  </Text>
+                ) : null}
                 <Text style={styles.counterMeta}>
                   На складе: {formatSkeinQuantity(link.yarn.quantityMilliskeins)}
                 </Text>
@@ -505,6 +536,20 @@ export default function ProjectDetailScreen() {
                   title="Исправить"
                   variant="ghost"
                   onPress={() => handleCorrectUsage(link)}
+                />
+                <Button
+                  title="План"
+                  variant="ghost"
+                  onPress={() => handleSetPlannedQuantity(link)}
+                />
+                <Button
+                  title="Хватит?"
+                  variant="ghost"
+                  onPress={() =>
+                    router.push(
+                      `/calculators/yarn-enough?projectId=${project.id}&linkId=${link.id}`
+                    )
+                  }
                 />
                 <Button
                   title="Убрать"

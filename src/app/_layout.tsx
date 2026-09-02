@@ -62,6 +62,10 @@ export default function RootLayout() {
               name="yarn/[id]"
               options={{ title: 'Пряжа' }}
             />
+            <Stack.Screen
+              name="calculators"
+              options={{ headerShown: false }}
+            />
           </Stack>
         </DatabaseGate>
       </ThemeProvider>

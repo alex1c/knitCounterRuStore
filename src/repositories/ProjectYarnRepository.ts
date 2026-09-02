@@ -133,6 +133,36 @@ export class ProjectYarnRepository {
     }
   }
 
+  /** Updates planned quantity for project yarn planning (calculators only). */
+  setPlannedQuantityMilliskeins(
+    linkId: string,
+    plannedQuantityMilliskeins: number | null
+  ): ProjectYarn {
+    if (plannedQuantityMilliskeins != null) {
+      validateQuantityMilliskeins(
+        plannedQuantityMilliskeins,
+        'plannedQuantityMilliskeins'
+      );
+    }
+    const now = nowIsoUtc();
+    try {
+      this.db.run(
+        `UPDATE project_yarns SET
+          planned_quantity_milliskeins = ?, updated_at = ?
+        WHERE id = ?`,
+        [plannedQuantityMilliskeins, now, linkId]
+      );
+      const link = this.getLinkById(linkId);
+      if (!link) {
+        throw new StorageError(`Project yarn link not found: ${linkId}`);
+      }
+      return link;
+    } catch (err) {
+      if (err instanceof StorageError) throw err;
+      throw new StorageError('Failed to update planned quantity', err);
+    }
+  }
+
   /** Internal: set used quantity (called from YarnUsageService). */
   setUsedQuantityMilliskeins(
     linkId: string,
