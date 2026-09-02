@@ -16,7 +16,7 @@ export function assertIsoTimestamp(value: string): void {
     throw new Error(`Expected non-empty ISO timestamp string, got: ${String(value)}`);
   }
 
-  if (!ISO_TIMESTAMP_REGEX.test(value) && Number.isNaN(Date.parse(value))) {
+  if (!ISO_TIMESTAMP_REGEX.test(value) || Number.isNaN(Date.parse(value))) {
     throw new Error(`Invalid ISO-8601 timestamp: ${value}`);
   }
 

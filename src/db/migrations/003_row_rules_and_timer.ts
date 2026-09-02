@@ -28,6 +28,17 @@ export const migration003RowRulesAndTimer: Migration = {
         position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        CHECK (
+          (rule_type = 'exact' AND exact_row IS NOT NULL
+            AND start_row IS NULL AND every_n_rows IS NULL AND end_row IS NULL)
+          OR (rule_type = 'every_n' AND every_n_rows IS NOT NULL
+            AND start_row IS NULL AND exact_row IS NULL)
+          OR (rule_type = 'every_n_from' AND start_row IS NOT NULL
+            AND every_n_rows IS NOT NULL AND exact_row IS NULL
+            AND (end_row IS NULL OR end_row >= start_row))
+          OR (rule_type = 'list' AND start_row IS NULL
+            AND every_n_rows IS NULL AND exact_row IS NULL AND end_row IS NULL)
+        ),
         FOREIGN KEY (project_id) REFERENCES knitting_projects(id) ON DELETE CASCADE,
         FOREIGN KEY (project_part_id) REFERENCES project_parts(id) ON DELETE SET NULL,
         FOREIGN KEY (counter_id) REFERENCES counters(id) ON DELETE CASCADE
@@ -91,9 +102,15 @@ export const migration003RowRulesAndTimer: Migration = {
         position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        CHECK (parent_counter_id IS NULL OR parent_counter_id <> id),
+        CHECK (
+          (link_type IS NULL AND parent_counter_id IS NULL)
+          OR (link_type = 'follow_main' AND parent_counter_id IS NOT NULL
+            AND repeat_length IS NOT NULL AND repeat_length > 0)
+        ),
         FOREIGN KEY (project_id) REFERENCES knitting_projects(id) ON DELETE CASCADE,
         FOREIGN KEY (project_part_id) REFERENCES project_parts(id) ON DELETE SET NULL,
-        FOREIGN KEY (parent_counter_id) REFERENCES counters_v3(id) ON DELETE CASCADE
+        FOREIGN KEY (parent_counter_id) REFERENCES counters_v3(id) ON DELETE SET NULL
       );
 
       INSERT INTO counters_v3 (
@@ -156,10 +173,17 @@ export const migration003RowRulesAndTimer: Migration = {
       CREATE TRIGGER counters_parent_scope_insert
       BEFORE INSERT ON counters
       WHEN NEW.parent_counter_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM counters AS parent
-          WHERE parent.id = NEW.parent_counter_id
-            AND parent.project_id = NEW.project_id
+        AND (
+          NOT EXISTS (
+            SELECT 1 FROM counters AS parent
+            WHERE parent.id = NEW.parent_counter_id
+              AND parent.project_id = NEW.project_id
+              AND parent.parent_counter_id IS NULL
+          )
+          OR EXISTS (
+            SELECT 1 FROM counters AS child
+            WHERE child.parent_counter_id = NEW.id
+          )
         )
       BEGIN
         SELECT RAISE(ABORT, 'parent counter must belong to same project');
@@ -168,13 +192,28 @@ export const migration003RowRulesAndTimer: Migration = {
       CREATE TRIGGER counters_parent_scope_update
       BEFORE UPDATE OF project_id, parent_counter_id ON counters
       WHEN NEW.parent_counter_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM counters AS parent
-          WHERE parent.id = NEW.parent_counter_id
-            AND parent.project_id = NEW.project_id
+        AND (
+          NOT EXISTS (
+            SELECT 1 FROM counters AS parent
+            WHERE parent.id = NEW.parent_counter_id
+              AND parent.project_id = NEW.project_id
+              AND parent.parent_counter_id IS NULL
+          )
+          OR EXISTS (
+            SELECT 1 FROM counters AS child
+            WHERE child.parent_counter_id = NEW.id
+          )
         )
       BEGIN
         SELECT RAISE(ABORT, 'parent counter must belong to same project');
+      END;
+
+      CREATE TRIGGER counters_parent_preserve_children_delete
+      BEFORE DELETE ON counters
+      BEGIN
+        UPDATE counters
+        SET parent_counter_id = NULL, link_type = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE parent_counter_id = OLD.id;
       END;
 
       CREATE TRIGGER row_rules_scope_insert
@@ -209,6 +248,28 @@ export const migration003RowRulesAndTimer: Migration = {
       )
       BEGIN
         SELECT RAISE(ABORT, 'row rule scope must match project/counter/part');
+      END;
+
+      CREATE TRIGGER knitting_sessions_scope_insert
+      BEFORE INSERT ON knitting_sessions
+      WHEN NEW.project_part_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM project_parts
+          WHERE id = NEW.project_part_id AND project_id = NEW.project_id
+        )
+      BEGIN
+        SELECT RAISE(ABORT, 'session part must belong to session project');
+      END;
+
+      CREATE TRIGGER knitting_sessions_scope_update
+      BEFORE UPDATE OF project_id, project_part_id ON knitting_sessions
+      WHEN NEW.project_part_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM project_parts
+          WHERE id = NEW.project_part_id AND project_id = NEW.project_id
+        )
+      BEGIN
+        SELECT RAISE(ABORT, 'session part must belong to session project');
       END;
     `);
   },

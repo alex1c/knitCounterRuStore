@@ -140,7 +140,7 @@ export class RowRuleRepository {
   listRulesByProject(projectId: string): RowRule[] {
     try {
       const rows = this.db.getAll<RuleRow>(
-        'SELECT * FROM row_rules WHERE project_id = ? ORDER BY position ASC, created_at ASC',
+        'SELECT * FROM row_rules WHERE project_id = ? ORDER BY position ASC, created_at ASC, id ASC',
         [projectId]
       );
       return rows.map((row) => this.mapRule(row));
@@ -152,7 +152,7 @@ export class RowRuleRepository {
   listRulesByCounter(counterId: string): RowRule[] {
     try {
       const rows = this.db.getAll<RuleRow>(
-        'SELECT * FROM row_rules WHERE counter_id = ? ORDER BY position ASC, created_at ASC',
+        'SELECT * FROM row_rules WHERE counter_id = ? ORDER BY position ASC, created_at ASC, id ASC',
         [counterId]
       );
       return rows.map((row) => this.mapRule(row));
@@ -172,7 +172,9 @@ export class RowRuleRepository {
     }
 
     const updatedInstruction = input.instruction ?? existing.instruction;
-    const listRows = input.listRows ?? existing.listRows;
+    const listRows = [...new Set(input.listRows ?? existing.listRows)].sort(
+      (a, b) => a - b
+    );
     validateRowRuleFields({
       ruleType: existing.ruleType,
       instruction: updatedInstruction,
@@ -183,6 +185,7 @@ export class RowRuleRepository {
       endRow: input.endRow !== undefined ? input.endRow : existing.endRow,
       listRows,
     });
+    validatePosition(input.position ?? existing.position);
 
     const now = nowIsoUtc();
 
@@ -217,7 +220,7 @@ export class RowRuleRepository {
           ]
         );
 
-        if (input.listRows) {
+        if (input.listRows !== undefined) {
           this.replaceListRows(id, existing.ruleType, listRows);
         }
 

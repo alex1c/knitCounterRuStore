@@ -18,19 +18,27 @@ export type NextRuleMatch = {
   rowsUntil: number;
 };
 
+function isPositiveRow(value: number | null | undefined): value is number {
+  return value != null && Number.isSafeInteger(value) && value > 0;
+}
+
+function hasValidEndRow(rule: RowRule): boolean {
+  return rule.endRow == null || isPositiveRow(rule.endRow);
+}
+
 /** Returns true when rule is due at currentRow. */
 export function isRuleDueAtRow(rule: RowRule, currentRow: number): boolean {
-  if (!rule.isActive || currentRow <= 0) {
+  if (!rule.isActive || !isPositiveRow(currentRow) || !hasValidEndRow(rule)) {
     return false;
   }
 
   switch (rule.ruleType) {
     case 'exact':
-      return rule.exactRow === currentRow;
+      return isPositiveRow(rule.exactRow) && rule.exactRow === currentRow;
 
     case 'every_n': {
       const n = rule.everyNRows;
-      if (n == null || n <= 0) return false;
+      if (!isPositiveRow(n)) return false;
       if (currentRow < n) return false;
       if (rule.endRow != null && currentRow > rule.endRow) return false;
       return currentRow % n === 0;
@@ -39,14 +47,15 @@ export function isRuleDueAtRow(rule: RowRule, currentRow: number): boolean {
     case 'every_n_from': {
       const start = rule.startRow;
       const n = rule.everyNRows;
-      if (start == null || n == null || start <= 0 || n <= 0) return false;
+      if (!isPositiveRow(start) || !isPositiveRow(n)) return false;
       if (currentRow < start) return false;
       if (rule.endRow != null && currentRow > rule.endRow) return false;
       return (currentRow - start) % n === 0;
     }
 
     case 'list':
-      return rule.listRows.includes(currentRow);
+      return Array.isArray(rule.listRows) &&
+        rule.listRows.some((row) => isPositiveRow(row) && row === currentRow);
 
     default:
       return false;
@@ -65,21 +74,27 @@ export function getNextOccurrenceForRule(
   rule: RowRule,
   currentRow: number
 ): number | null {
-  if (!rule.isActive) return null;
+  if (
+    !rule.isActive ||
+    !Number.isSafeInteger(currentRow) ||
+    currentRow < 0 ||
+    !hasValidEndRow(rule)
+  ) return null;
 
   switch (rule.ruleType) {
     case 'exact': {
       const row = rule.exactRow;
-      if (row == null || row <= currentRow) return null;
+      if (!isPositiveRow(row) || row <= currentRow) return null;
       return row;
     }
 
     case 'every_n': {
       const n = rule.everyNRows;
-      if (n == null || n <= 0) return null;
+      if (!isPositiveRow(n)) return null;
       if (currentRow < n) return n;
       const remainder = currentRow % n;
       const candidate = remainder === 0 ? currentRow + n : currentRow + (n - remainder);
+      if (!isPositiveRow(candidate)) return null;
       if (rule.endRow != null && candidate > rule.endRow) return null;
       return candidate;
     }
@@ -87,7 +102,7 @@ export function getNextOccurrenceForRule(
     case 'every_n_from': {
       const start = rule.startRow;
       const n = rule.everyNRows;
-      if (start == null || n == null) return null;
+      if (!isPositiveRow(start) || !isPositiveRow(n)) return null;
       if (currentRow < start) return start;
       const offset = currentRow - start;
       const remainder = offset % n;
@@ -95,13 +110,20 @@ export function getNextOccurrenceForRule(
         remainder === 0 && isRuleDueAtRow(rule, currentRow)
           ? currentRow + n
           : currentRow + (remainder === 0 ? n : n - remainder);
+      if (!isPositiveRow(candidate)) return null;
       if (rule.endRow != null && candidate > rule.endRow) return null;
       return candidate;
     }
 
     case 'list': {
-      const next = rule.listRows.find((row) => row > currentRow);
-      return next ?? null;
+      if (!Array.isArray(rule.listRows)) return null;
+      let next: number | null = null;
+      for (const row of rule.listRows) {
+        if (isPositiveRow(row) && row > currentRow && (next == null || row < next)) {
+          next = row;
+        }
+      }
+      return next;
     }
 
     default:

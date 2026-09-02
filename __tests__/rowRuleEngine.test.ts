@@ -186,3 +186,25 @@ describe('getDueRowRules — undo/decrement semantics', () => {
     expect(getDueRowRules([rule], 41)).toHaveLength(0);
   });
 });
+
+describe('malformed rule fail-safe behavior', () => {
+  test('invalid intervals never produce due or NaN next occurrences', () => {
+    const invalid = makeRule({
+      ruleType: 'every_n_from',
+      exactRow: null,
+      startRow: 1,
+      everyNRows: 0,
+    });
+    expect(isRuleDueAtRow(invalid, 1)).toBe(false);
+    expect(getNextOccurrenceForRule(invalid, 1)).toBeNull();
+  });
+
+  test('unsorted list data still returns the nearest strictly-future row', () => {
+    const rule = makeRule({
+      ruleType: 'list',
+      exactRow: null,
+      listRows: [54, -1, 42, 30],
+    });
+    expect(getNextOccurrenceForRule(rule, 30)).toBe(42);
+  });
+});

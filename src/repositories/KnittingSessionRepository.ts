@@ -24,6 +24,7 @@ export class KnittingSessionRepository {
 
   /** Starts a new session; ends any existing active session for the project first. */
   startSession(projectId: string, projectPartId?: string | null): KnittingSession {
+    this.validatePartScope(projectId, projectPartId ?? null);
     const now = nowIsoUtc();
     const id = createId();
 
@@ -59,6 +60,7 @@ export class KnittingSessionRepository {
     }
 
     const endedAt = nowIsoUtc();
+    assertIsoTimestamp(existing.startedAt);
     const duration = Math.max(
       0,
       Math.floor((Date.parse(endedAt) - Date.parse(existing.startedAt)) / 1000)
@@ -127,6 +129,17 @@ export class KnittingSessionRepository {
       return completed + (active ? this.getElapsedSeconds(active) : 0);
     } catch (err) {
       throw new StorageError('Failed to get total duration', err);
+    }
+  }
+
+  private validatePartScope(projectId: string, projectPartId: string | null): void {
+    if (projectPartId == null) return;
+    const part = this.db.getFirst<{ project_id: string }>(
+      'SELECT project_id FROM project_parts WHERE id = ?',
+      [projectPartId]
+    );
+    if (!part || part.project_id !== projectId) {
+      throw new StorageError('Session part must belong to the same project');
     }
   }
 }

@@ -51,7 +51,7 @@ describe('migration v2 to v3', () => {
         id, project_id, project_part_id, name, current_value, start_value,
         target_value, repeat_length, is_primary, position, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [counterId, project.id, null, 'Ряды', 1, 0, null, null, 1, 0, now, now]
+      [counterId, project.id, null, 'Ряды', 17, 3, 99, 8, 1, 4, now, now]
     );
     db.run(
       `INSERT INTO counter_events (
@@ -67,8 +67,19 @@ describe('migration v2 to v3', () => {
     );
 
     expect(db.getUserVersion()).toBe(3);
-    expect(counters.getCounterById(counterId)?.currentValue).toBe(1);
-    expect(counters.listEventsByCounter(counterId)).toHaveLength(1);
+    expect(counters.getCounterById(counterId)).toMatchObject({
+      currentValue: 17,
+      startValue: 3,
+      targetValue: 99,
+      repeatLength: 8,
+      isPrimary: true,
+      position: 4,
+    });
+    expect(counters.listEventsByCounter(counterId)[0]).toMatchObject({
+      id: 'event-migration-v3',
+      createdAt: now,
+    });
+    expect(db.getAll('PRAGMA foreign_key_check')).toEqual([]);
 
     const tables = db.getAll<{ name: string }>(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('row_rules', 'knitting_sessions')`
@@ -370,5 +381,180 @@ describe('cascade delete', () => {
     projects.deleteProject(project.id);
     expect(rules.getRuleById(rule.id)).toBeNull();
     expect(sessions.getActiveSession(project.id)).toBeNull();
+  });
+});
+
+describe('migration v2 to v3 rollback', () => {
+  test('a failure in the real v3 migration preserves v2 data and schema', async () => {
+    const SQL = await initSqlJs();
+    const db = createSqlJsAdapter(new SQL.Database());
+    db.exec('PRAGMA foreign_keys = ON;');
+    runMigrations(db, [migration001Initial, migration002CounterPartIntegrity], 2);
+    const project = new ProjectRepository(db).createProject({ name: 'Rollback v3' });
+    const counterId = 'rollback-counter';
+    const now = '2026-01-02T00:00:00.000Z';
+    db.run(
+      `INSERT INTO counters (
+        id, project_id, project_part_id, name, current_value, start_value,
+        target_value, repeat_length, is_primary, position, created_at, updated_at
+      ) VALUES (?, ?, NULL, ?, 1, 0, NULL, NULL, 1, 0, ?, ?)`,
+      [counterId, project.id, 'Rows', now, now]
+    );
+    db.run(
+      `INSERT INTO counter_events
+        (id, counter_id, previous_value, new_value, event_type, created_at)
+       VALUES (?, ?, 0, 1, 'increment', ?)`,
+      ['rollback-event', counterId, now]
+    );
+    const failingDb: SqlDatabase = {
+      ...db,
+      exec(sql) {
+        db.exec(sql);
+        if (sql.includes('CREATE TABLE row_rules')) {
+          throw new Error('controlled post-DDL failure');
+        }
+      },
+    };
+
+    expect(() => runMigrations(
+      failingDb,
+      [migration001Initial, migration002CounterPartIntegrity, migration003RowRulesAndTimer],
+      3
+    )).toThrow();
+    expect(db.getUserVersion()).toBe(2);
+    expect(db.getFirst<{ current_value: number }>(
+      'SELECT current_value FROM counters WHERE id = ?', [counterId]
+    )?.current_value).toBe(1);
+    expect(db.getAll('SELECT id FROM counter_events WHERE counter_id = ?', [counterId])).toHaveLength(1);
+    expect(db.getFirst("SELECT name FROM sqlite_master WHERE name = 'row_rules'")).toBeNull();
+    expect(db.getFirst("SELECT name FROM sqlite_master WHERE name = 'counters_v3'")).toBeNull();
+  });
+});
+
+describe('Phase 3 integrity hardening', () => {
+  test('parent deletion preserves and unlinks the child counter', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const counters = new CounterRepository(db);
+    const { project, primaryCounter } = service.createProjectWithDefaults({ name: 'Links' });
+    const child = counters.createCounter({
+      projectId: project.id,
+      name: 'Pattern',
+      parentCounterId: primaryCounter.id,
+      linkType: 'follow_main',
+      repeatLength: 8,
+    });
+
+    counters.deleteCounter(primaryCounter.id);
+
+    expect(counters.getCounterById(child.id)).toMatchObject({
+      parentCounterId: null,
+      linkType: null,
+      repeatLength: 8,
+    });
+  });
+
+  test('rejects self-links and turning a parent into a linked child', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const counters = new CounterRepository(db);
+    const { project, primaryCounter } = service.createProjectWithDefaults({ name: 'No chains' });
+    const child = counters.createCounter({
+      projectId: project.id,
+      name: 'Child',
+      parentCounterId: primaryCounter.id,
+      linkType: 'follow_main',
+      repeatLength: 4,
+    });
+    const other = counters.createCounter({ projectId: project.id, name: 'Other' });
+
+    expect(() => counters.updateCounter(other.id, {
+      parentCounterId: other.id,
+      linkType: 'follow_main',
+      repeatLength: 2,
+    })).toThrow(DomainValidationError);
+    expect(() => counters.updateCounter(primaryCounter.id, {
+      parentCounterId: other.id,
+      linkType: 'follow_main',
+      repeatLength: 2,
+    })).toThrow(DomainValidationError);
+    expect(counters.getCounterById(child.id)?.parentCounterId).toBe(primaryCounter.id);
+  });
+
+  test('linked display is blank before row one and ignores a different parent', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const counters = new CounterRepository(db);
+    const { project, primaryCounter } = service.createProjectWithDefaults({ name: 'Display' });
+    const child = counters.createCounter({
+      projectId: project.id,
+      name: 'Pattern',
+      parentCounterId: primaryCounter.id,
+      linkType: 'follow_main',
+      repeatLength: 6,
+    });
+    const other = counters.createCounter({ projectId: project.id, name: 'Other' });
+
+    expect(getLinkedPatternPosition(primaryCounter, child)).toBeNull();
+    expect(getLinkedPatternPosition(other, child)).toBeNull();
+    counters.incrementCounter(primaryCounter.id);
+    expect(getLinkedPatternPosition(counters.getCounterById(primaryCounter.id)!, child)).toBe(1);
+  });
+
+  test('database triggers reject invalid linked and cross-project update states', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const rules = new RowRuleRepository(db);
+    const a = service.createProjectWithDefaults({ name: 'A2' });
+    const b = service.createProjectWithDefaults({ name: 'B2' });
+    const rule = rules.createRule({
+      projectId: a.project.id,
+      counterId: a.primaryCounter.id,
+      name: 'Rule', instruction: 'Act', ruleType: 'exact', exactRow: 2,
+    });
+
+    expect(() => db.run(
+      'UPDATE row_rules SET counter_id = ? WHERE id = ?',
+      [b.primaryCounter.id, rule.id]
+    )).toThrow();
+    expect(() => db.run(
+      'UPDATE counters SET parent_counter_id = id, link_type = ?, repeat_length = 2 WHERE id = ?',
+      ['follow_main', a.primaryCounter.id]
+    )).toThrow();
+  });
+
+  test('timer start rollback preserves the previous active session', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const { project } = service.createProjectWithDefaults({ name: 'Atomic timer' });
+    const normal = new KnittingSessionRepository(db);
+    const first = normal.startSession(project.id);
+    const failingDb: SqlDatabase = {
+      ...db,
+      run(sql, params) {
+        if (sql.includes('INSERT INTO knitting_sessions')) throw new Error('controlled insert failure');
+        return db.run(sql, params);
+      },
+    };
+
+    expect(() => new KnittingSessionRepository(failingDb).startSession(project.id)).toThrow();
+    expect(normal.getActiveSession(project.id)?.id).toBe(first.id);
+  });
+
+  test('timer part scope is enforced on insert and update', async () => {
+    const db = await openTestDb();
+    const service = new ProjectService(db);
+    const parts = new ProjectPartRepository(db);
+    const sessions = new KnittingSessionRepository(db);
+    const a = service.createProjectWithDefaults({ name: 'Timer A' });
+    const b = service.createProjectWithDefaults({ name: 'Timer B' });
+    const foreignPart = parts.createPart({ projectId: b.project.id, name: 'Foreign' });
+
+    expect(() => sessions.startSession(a.project.id, foreignPart.id)).toThrow();
+    const session = sessions.startSession(a.project.id);
+    expect(() => db.run(
+      'UPDATE knitting_sessions SET project_part_id = ? WHERE id = ?',
+      [foreignPart.id, session.id]
+    )).toThrow();
   });
 });

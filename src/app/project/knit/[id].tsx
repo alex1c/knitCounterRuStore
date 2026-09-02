@@ -77,9 +77,9 @@ export default function KnittingScreen() {
   }, [activeCounterId, initialCounterId, counters, countableCounters]);
 
   const displayFromRepo = useMemo(() => {
-    if (!resolvedCounterId || !counterRepository) return null;
-    return counterRepository.getCounterById(resolvedCounterId);
-  }, [resolvedCounterId, counterRepository, detail]);
+    if (!resolvedCounterId || !counters) return null;
+    return counters.find((counter) => counter.id === resolvedCounterId) ?? null;
+  }, [resolvedCounterId, counters]);
 
   useEffect(() => {
     if (displayFromRepo) {

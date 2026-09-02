@@ -36,7 +36,12 @@ export function getLinkedPatternPosition(
   parent: Counter,
   linked: Counter
 ): number | null {
-  if (linked.linkType !== 'follow_main' || linked.repeatLength == null) {
+  if (
+    linked.linkType !== 'follow_main' ||
+    linked.parentCounterId !== parent.id ||
+    linked.repeatLength == null ||
+    parent.currentValue <= parent.startValue
+  ) {
     return null;
   }
   return getPatternPosition(

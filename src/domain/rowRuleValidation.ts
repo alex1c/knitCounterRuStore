@@ -74,6 +74,7 @@ export function validateRowRuleFields(input: RowRuleInput): void {
 
   switch (input.ruleType) {
     case 'exact':
+      rejectUnexpectedRuleFields(input, ['everyNRows', 'startRow', 'endRow']);
       validatePositiveRow(input.exactRow, 'exactRow');
       if (input.exactRow == null) {
         throw new DomainValidationError('Укажите номер ряда', 'exactRow');
@@ -81,6 +82,7 @@ export function validateRowRuleFields(input: RowRuleInput): void {
       break;
 
     case 'every_n':
+      rejectUnexpectedRuleFields(input, ['exactRow', 'startRow']);
       validatePositiveRow(input.everyNRows, 'everyNRows');
       if (input.everyNRows == null) {
         throw new DomainValidationError('Укажите интервал N', 'everyNRows');
@@ -89,6 +91,7 @@ export function validateRowRuleFields(input: RowRuleInput): void {
       break;
 
     case 'every_n_from':
+      rejectUnexpectedRuleFields(input, ['exactRow']);
       validatePositiveRow(input.startRow, 'startRow');
       validatePositiveRow(input.everyNRows, 'everyNRows');
       if (input.startRow == null || input.everyNRows == null) {
@@ -107,6 +110,12 @@ export function validateRowRuleFields(input: RowRuleInput): void {
       break;
 
     case 'list': {
+      rejectUnexpectedRuleFields(input, [
+        'exactRow',
+        'everyNRows',
+        'startRow',
+        'endRow',
+      ]);
       const rows = input.listRows ?? [];
       if (rows.length === 0) {
         throw new DomainValidationError('Укажите хотя бы один ряд', 'listRows');
@@ -115,6 +124,20 @@ export function validateRowRuleFields(input: RowRuleInput): void {
         validatePositiveRow(row, 'listRows');
       }
       break;
+    }
+  }
+}
+
+function rejectUnexpectedRuleFields(
+  input: RowRuleInput,
+  fields: (keyof RowRuleInput)[]
+): void {
+  for (const field of fields) {
+    if (input[field] != null) {
+      throw new DomainValidationError(
+        `${String(field)} is not valid for ${input.ruleType}`,
+        String(field)
+      );
     }
   }
 }

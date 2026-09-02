@@ -84,6 +84,7 @@ export class CounterRepository {
     validatePosition(input.position ?? 0);
     this.validatePartScope(input.projectId, input.projectPartId ?? null);
     this.validateLinkConfig(
+      null,
       input.projectId,
       input.parentCounterId ?? null,
       input.linkType ?? null,
@@ -210,6 +211,7 @@ export class CounterRepository {
     validatePosition(updated.position);
     this.validatePartScope(updated.projectId, updated.projectPartId);
     this.validateLinkConfig(
+      id,
       updated.projectId,
       updated.parentCounterId,
       updated.linkType,
@@ -245,10 +247,18 @@ export class CounterRepository {
 
   deleteCounter(id: string): void {
     try {
-      const result = this.db.run('DELETE FROM counters WHERE id = ?', [id]);
-      if (result.changes === 0) {
-        throw new StorageError(`Counter not found: ${id}`);
-      }
+      this.db.withTransaction(() => {
+        this.db.run(
+          `UPDATE counters
+           SET parent_counter_id = NULL, link_type = NULL, updated_at = ?
+           WHERE parent_counter_id = ?`,
+          [nowIsoUtc(), id]
+        );
+        const result = this.db.run('DELETE FROM counters WHERE id = ?', [id]);
+        if (result.changes === 0) {
+          throw new StorageError(`Counter not found: ${id}`);
+        }
+      });
     } catch (err) {
       if (err instanceof StorageError) throw err;
       throw new StorageError('Failed to delete counter', err);
@@ -393,6 +403,7 @@ export class CounterRepository {
   }
 
   private validateLinkConfig(
+    counterId: string | null,
     projectId: string,
     parentCounterId: string | null,
     linkType: CounterLinkType | null,
@@ -400,13 +411,24 @@ export class CounterRepository {
   ): void {
     if (linkType == null && parentCounterId == null) return;
 
+    if (linkType == null || parentCounterId == null) {
+      throw new DomainValidationError(
+        'linkType and parentCounterId must be set or cleared together',
+        'linkType'
+      );
+    }
+
+    validateCounterLinkType(linkType);
+
     if (linkType === 'follow_main') {
-      validateCounterLinkType(linkType);
       if (!parentCounterId) {
         throw new DomainValidationError(
           'parentCounterId required for linked counter',
           'parentCounterId'
         );
+      }
+      if (counterId != null && parentCounterId === counterId) {
+        throw new DomainValidationError('counter cannot link to itself', 'parentCounterId');
       }
       validateRepeatLength(repeatLength);
       if (repeatLength == null) {
@@ -430,6 +452,18 @@ export class CounterRepository {
           'only one-level counter links are allowed',
           'parentCounterId'
         );
+      }
+      if (counterId != null) {
+        const child = this.db.getFirst<{ id: string }>(
+          'SELECT id FROM counters WHERE parent_counter_id = ? LIMIT 1',
+          [counterId]
+        );
+        if (child) {
+          throw new DomainValidationError(
+            'a parent counter cannot itself become linked',
+            'parentCounterId'
+          );
+        }
       }
     }
   }
