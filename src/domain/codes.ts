@@ -32,3 +32,7 @@ export type RowRuleType = (typeof ROW_RULE_TYPES)[number];
 
 export const COUNTER_LINK_TYPES = ['follow_main'] as const;
 export type CounterLinkType = (typeof COUNTER_LINK_TYPES)[number];
+
+/** Stored document type codes for project attachments. */
+export const PROJECT_DOCUMENT_TYPES = ['pdf', 'image', 'other'] as const;
+export type ProjectDocumentType = (typeof PROJECT_DOCUMENT_TYPES)[number];

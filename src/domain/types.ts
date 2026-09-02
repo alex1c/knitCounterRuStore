@@ -6,6 +6,7 @@ import type {
   CounterEventType,
   CounterLinkType,
   CraftType,
+  ProjectDocumentType,
   ProjectStatus,
   RowRuleType,
 } from './codes';
@@ -122,6 +123,20 @@ export type ProjectYarn = {
   yarnId: string;
   plannedQuantityMilliskeins: number | null;
   usedQuantityMilliskeins: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Project-attached PDF or reference image stored in app-managed storage. */
+export type ProjectDocument = {
+  id: string;
+  projectId: string;
+  type: ProjectDocumentType;
+  title: string;
+  originalName: string | null;
+  fileUri: string;
+  mimeType: string | null;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };

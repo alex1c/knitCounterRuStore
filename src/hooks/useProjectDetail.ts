@@ -5,7 +5,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 
-import type { Counter, KnittingProject, ProjectPart, ProjectYarn, RowRule, Yarn } from '@/domain/types';
+import type { Counter, KnittingProject, ProjectDocument, ProjectPart, ProjectYarn, RowRule, Yarn } from '@/domain/types';
 import { useDatabase } from '@/providers/DatabaseProvider';
 
 export type ProjectYarnDetail = ProjectYarn & { yarn: Yarn };
@@ -16,6 +16,7 @@ export type ProjectDetail = {
   counters: Counter[];
   rules: RowRule[];
   projectYarns: ProjectYarnDetail[];
+  documents: ProjectDocument[];
   totalKnittingSeconds: number;
   activeRuleCount: number;
 };
@@ -29,6 +30,7 @@ export function useProjectDetail(projectId: string | undefined) {
     knittingSessionRepository,
     projectYarnRepository,
     yarnRepository,
+    projectDocumentService,
   } = useDatabase();
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,8 @@ export function useProjectDetail(projectId: string | undefined) {
       !rowRuleRepository ||
       !knittingSessionRepository ||
       !projectYarnRepository ||
-      !yarnRepository
+      !yarnRepository ||
+      !projectDocumentService
     ) {
       setDetail(null);
       setLoading(false);
@@ -69,6 +72,7 @@ export function useProjectDetail(projectId: string | undefined) {
         return yarn ? { ...link, yarn } : null;
       })
       .filter((row): row is ProjectYarnDetail => row != null);
+    const documents = projectDocumentService.listForProject(projectId);
 
     setDetail({
       project,
@@ -76,6 +80,7 @@ export function useProjectDetail(projectId: string | undefined) {
       counters,
       rules,
       projectYarns,
+      documents,
       totalKnittingSeconds,
       activeRuleCount,
     });
@@ -89,6 +94,7 @@ export function useProjectDetail(projectId: string | undefined) {
     knittingSessionRepository,
     projectYarnRepository,
     yarnRepository,
+    projectDocumentService,
   ]);
 
   useFocusEffect(

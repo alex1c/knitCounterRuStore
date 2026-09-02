@@ -6,7 +6,7 @@ import initSqlJs from 'sql.js';
 
 import { createDatabaseFromClient } from '@/db/database';
 import { runMigrations } from '@/db/migrate';
-import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '@/db/migrations';
+import { MIGRATIONS } from '@/db/migrations';
 import { createSqlJsAdapter } from '@/db/sqlJsAdapter';
 import type { SqlDatabase } from '@/db/types';
 import { DomainValidationError } from '@/domain/validation';
@@ -248,7 +248,7 @@ describe('migration v3 to v4', () => {
       exactRow: 10,
     });
 
-    runMigrations(db, MIGRATIONS, CURRENT_SCHEMA_VERSION);
+    runMigrations(db, MIGRATIONS.filter((m) => m.version <= 4), 4);
     expect(db.getUserVersion()).toBe(4);
 
     expect(service.createProjectWithDefaults({ name: 'After' }).project).toBeTruthy();

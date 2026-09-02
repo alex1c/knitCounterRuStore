@@ -17,7 +17,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RowRuleBanner } from '@/components/knitting/RowRuleBanner';
-import type { Counter, KnittingSession } from '@/domain/types';
+import { KnittingDocumentPickerModal } from '@/components/knitting/KnittingDocumentPickerModal';
+import type { Counter, KnittingSession, ProjectDocument } from '@/domain/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
 import {
@@ -50,11 +51,16 @@ export default function KnittingScreen() {
   const [busy, setBusy] = useState(false);
   const [activeSession, setActiveSession] = useState<KnittingSession | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [docPickerVisible, setDocPickerVisible] = useState(false);
 
   const counters = detail?.counters;
   const parts = detail?.parts;
   const project = detail?.project;
   const rules = useMemo(() => detail?.rules ?? [], [detail?.rules]);
+  const documents = useMemo(
+    () => detail?.documents ?? [],
+    [detail?.documents]
+  );
 
   const countableCounters = useMemo(
     () => (counters ?? []).filter((c) => !isLinkedCounter(c)),
@@ -184,6 +190,21 @@ export default function KnittingScreen() {
     }
   };
 
+  const openScheme = () => {
+    if (documents.length === 0 || !id) return;
+    if (documents.length === 1) {
+      router.push(`/project/documents/${documents[0].id}?projectId=${id}`);
+      return;
+    }
+    setDocPickerVisible(true);
+  };
+
+  const openDocumentFromPicker = (doc: ProjectDocument) => {
+    setDocPickerVisible(false);
+    if (!id) return;
+    router.push(`/project/documents/${doc.id}?projectId=${id}`);
+  };
+
   if (!project || !displayCounter) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -216,6 +237,17 @@ export default function KnittingScreen() {
             </Text>
           ) : null}
         </View>
+        {documents.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Схема"
+            onPress={openScheme}
+            style={styles.schemeBtn}
+          >
+            <Ionicons name="document-text-outline" size={22} color={colors.textSecondary} />
+            <Text style={styles.schemeText}>Схема</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityLabel={activeSession?.isActive ? 'Остановить таймер' : 'Начать таймер'}
           onPress={handleTimerToggle}
@@ -322,6 +354,13 @@ export default function KnittingScreen() {
           <Text style={styles.secondaryLabel}>Отмена</Text>
         </Pressable>
       </View>
+
+      <KnittingDocumentPickerModal
+        visible={docPickerVisible}
+        documents={documents}
+        onSelect={openDocumentFromPicker}
+        onClose={() => setDocPickerVisible(false)}
+      />
     </View>
   );
 }
@@ -343,6 +382,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   headerText: { flex: 1 },
+  schemeBtn: { alignItems: 'center', minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  schemeText: { ...typography.caption, color: colors.textMuted },
   projectName: { ...typography.subtitle, color: colors.text },
   partName: { ...typography.caption, color: colors.textMuted },
   timerBtn: { alignItems: 'center', minWidth: 56, minHeight: 44 },

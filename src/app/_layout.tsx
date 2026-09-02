@@ -51,6 +51,10 @@ export default function RootLayout() {
               options={{ headerShown: false, gestureEnabled: false }}
             />
             <Stack.Screen
+              name="project/documents/[documentId]"
+              options={{ headerShown: false, presentation: 'modal' }}
+            />
+            <Stack.Screen
               name="project/rules/form"
               options={{ title: 'Действия по рядам', presentation: 'modal' }}
             />

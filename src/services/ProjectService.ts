@@ -14,6 +14,7 @@ import {
   type UpdateProjectInput,
 } from '@/repositories/ProjectRepository';
 import { ProjectPartRepository } from '@/repositories/ProjectPartRepository';
+import { ProjectDocumentService } from '@/services/ProjectDocumentService';
 import { nowIsoUtc } from '@/utils/timestamps';
 
 export type CreateProjectWithDefaultsInput = {
@@ -108,5 +109,26 @@ export class ProjectService {
   touchProject(id: string): void {
     const projects = new ProjectRepository(this.db);
     projects.touchProject(id);
+  }
+
+  /**
+   * Deletes project and attempts managed document cleanup.
+   * Database cascade removes document rows; file cleanup is best-effort.
+   */
+  deleteProject(id: string): void {
+    const projects = new ProjectRepository(this.db);
+    const existing = projects.getProjectById(id);
+    if (!existing) {
+      throw new StorageError(`Project not found: ${id}`);
+    }
+
+    const documentService = new ProjectDocumentService(this.db);
+    try {
+      documentService.cleanupProjectFiles(id);
+    } catch {
+      // Best-effort — do not block project deletion on filesystem errors.
+    }
+
+    projects.deleteProject(id);
   }
 }

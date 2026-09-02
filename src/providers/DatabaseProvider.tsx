@@ -22,8 +22,10 @@ import { SettingsRepository } from '@/repositories/SettingsRepository';
 import { RowRuleRepository } from '@/repositories/RowRuleRepository';
 import { KnittingSessionRepository } from '@/repositories/KnittingSessionRepository';
 import { ProjectYarnRepository } from '@/repositories/ProjectYarnRepository';
+import { ProjectDocumentRepository } from '@/repositories/ProjectDocumentRepository';
 import { YarnRepository } from '@/repositories/YarnRepository';
 import { ProjectService } from '@/services/ProjectService';
+import { ProjectDocumentService } from '@/services/ProjectDocumentService';
 import { YarnUsageService } from '@/services/YarnUsageService';
 
 export type DatabaseContextValue = {
@@ -38,6 +40,8 @@ export type DatabaseContextValue = {
   knittingSessionRepository: KnittingSessionRepository | null;
   yarnRepository: YarnRepository | null;
   projectYarnRepository: ProjectYarnRepository | null;
+  projectDocumentRepository: ProjectDocumentRepository | null;
+  projectDocumentService: ProjectDocumentService | null;
   yarnUsageService: YarnUsageService | null;
   projectService: ProjectService | null;
 };
@@ -96,6 +100,8 @@ export function DatabaseProvider({ children }: Props) {
         knittingSessionRepository: null,
         yarnRepository: null,
         projectYarnRepository: null,
+        projectDocumentRepository: null,
+        projectDocumentService: null,
         yarnUsageService: null,
         projectService: null,
       };
@@ -113,6 +119,8 @@ export function DatabaseProvider({ children }: Props) {
       knittingSessionRepository: new KnittingSessionRepository(db),
       yarnRepository: new YarnRepository(db),
       projectYarnRepository: new ProjectYarnRepository(db),
+      projectDocumentRepository: new ProjectDocumentRepository(db),
+      projectDocumentService: new ProjectDocumentService(db),
       yarnUsageService: new YarnUsageService(db),
       projectService: new ProjectService(db),
     };

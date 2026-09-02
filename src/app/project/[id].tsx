@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import { ProjectDocumentsSection } from '@/components/project/ProjectDocumentsSection';
 import { Card } from '@/components/ui/Card';
 import { PromptModal } from '@/components/ui/PromptModal';
 import { Screen } from '@/components/ui/Screen';
@@ -53,7 +54,7 @@ type PromptState = {
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { detail, loading, reload } = useProjectDetail(id);
-  const { projectPartRepository, counterRepository, projectRepository, rowRuleRepository, projectYarnRepository, yarnRepository, yarnUsageService } =
+  const { projectPartRepository, counterRepository, rowRuleRepository, projectYarnRepository, yarnRepository, yarnUsageService, projectService } =
     useDatabase();
   const [newPartName, setNewPartName] = useState('');
   const [newCounterName, setNewCounterName] = useState('');
@@ -71,7 +72,7 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const { project, parts, counters, rules, projectYarns, totalKnittingSeconds, activeRuleCount } = detail;
+  const { project, parts, counters, rules, projectYarns, documents, totalKnittingSeconds, activeRuleCount } = detail;
   const primaryCounter = counters.find((c) => c.isPrimary) ?? counters[0];
 
   const primaryRules = rules.filter(
@@ -92,7 +93,7 @@ export default function ProjectDetailScreen() {
           text: 'Удалить',
           style: 'destructive',
           onPress: () => {
-            projectRepository?.deleteProject(project.id);
+            projectService?.deleteProject(project.id);
             router.replace('/(tabs)/projects');
           },
         },
@@ -582,6 +583,12 @@ export default function ProjectDetailScreen() {
           }}
         />
       </View>
+
+      <ProjectDocumentsSection
+        projectId={project.id}
+        documents={documents}
+        onChanged={reload}
+      />
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Части</Text>
