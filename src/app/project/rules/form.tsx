@@ -22,6 +22,7 @@ import type { RowRuleType } from '@/domain/codes';
 import { parseRowListInput } from '@/domain/rowRuleValidation';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { isLinkedCounter } from '@/utils/counterDisplay';
 
@@ -133,6 +134,8 @@ export default function RuleFormScreen() {
           startRow: whenType === 'every_n_from' ? Number(startRow) : null,
           listRows: whenType === 'list' ? parseRowListInput(listRows) : [],
         });
+        // Only whenType / rule type string — never instruction text
+        Analytics.rowRuleCreated(ruleType);
       }
       router.back();
     } catch (err) {

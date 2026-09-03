@@ -81,7 +81,7 @@ export default function YarnDetailScreen() {
 
   if (!yarn) {
     return (
-      <Screen>
+      <Screen banner="yarn">
         <Text style={styles.loading}>Загрузка…</Text>
       </Screen>
     );
@@ -92,7 +92,7 @@ export default function YarnDetailScreen() {
   const inventoryValue = formatYarnInventoryValue(yarn);
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="yarn">
       <View style={styles.header}>
         <Text style={styles.title}>{formatYarnTitle(yarn)}</Text>
         <Pressable

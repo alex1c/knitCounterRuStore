@@ -15,6 +15,7 @@ import {
 import 'react-native-reanimated';
 
 import { DatabaseProvider, useDatabase } from '@/providers/DatabaseProvider';
+import { bootstrapMonetization } from '@/monetization/bootstrap';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export { ErrorBoundary } from 'expo-router';
@@ -91,7 +92,13 @@ export default function RootLayout() {
 
 /** Shows loading or error state while the database initializes. */
 function DatabaseGate({ children }: { children: React.ReactNode }) {
-  const { ready, error } = useDatabase();
+  const { ready, error, settingsRepository } = useDatabase();
+
+  // Boot analytics/ads once the local DB is ready
+  useEffect(() => {
+    if (!ready || !settingsRepository) return;
+    void bootstrapMonetization(settingsRepository);
+  }, [ready, settingsRepository]);
 
   if (error) {
     return (

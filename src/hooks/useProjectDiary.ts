@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { ActivityDayGroup, DiaryFilter } from '@/domain/types';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { ProjectActivityService } from '@/services/ProjectActivityService';
 import type { CreateDiaryEntryInput, UpdateDiaryEntryInput } from '@/repositories/ProjectDiaryEntryRepository';
 
@@ -48,6 +49,8 @@ export function useProjectDiary(projectId: string | undefined) {
         ...input,
         projectId,
       });
+      // Entry type code only — never note title/text
+      Analytics.diaryEntryCreated(created.type);
       reload();
       return created;
     },

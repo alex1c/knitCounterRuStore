@@ -6,6 +6,7 @@
  */
 
 import type { SqlDatabase } from '@/db/types';
+import { isMonetizationSettingsKey } from '@/monetization/MonetizationSettings';
 import { BACKUP_TABLE_ORDER, type BackupTableName } from './constants';
 import type { BackupDataPayload } from './types';
 
@@ -77,12 +78,19 @@ export function applyBackupToDatabase(
   else apply();
 }
 
-/** Clears dangling active_project / similar settings after restore. */
+/**
+ * Clears dangling active_project settings and strips monetization.* keys
+ * so ad/session state is never restored from a user archive.
+ */
 export function sanitizeSettingsAfterRestore(db: SqlDatabase): void {
   const settings = db.getAll<{ key: string; value: string }>(
     'SELECT key, value FROM app_settings'
   );
   for (const setting of settings) {
+    if (isMonetizationSettingsKey(setting.key)) {
+      db.run('DELETE FROM app_settings WHERE key = ?', [setting.key]);
+      continue;
+    }
     if (
       setting.key === 'activeProjectId' ||
       setting.key === 'active_project_id'

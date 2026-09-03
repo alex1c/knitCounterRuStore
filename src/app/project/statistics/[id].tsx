@@ -16,6 +16,7 @@ import {
   formatProjectAgeDays,
   formatChartBarLabel,
 } from '@/services/ProjectStatisticsService';
+import { InterstitialAdService } from '@/services/InterstitialAdService';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { formatSkeinQuantity } from '@/utils/yarnQuantity';
 
@@ -35,12 +36,15 @@ export default function ProjectStatisticsScreen() {
   useFocusEffect(
     useCallback(() => {
       reload();
+      return () => {
+        void InterstitialAdService.onStatisticsLeave();
+      };
     }, [reload])
   );
 
   if (!statistics.hasData) {
     return (
-      <Screen scroll>
+      <Screen scroll banner="projects">
         <EmptyState
           title="Статистика появится после первых занятий вязанием"
           description="Начните вязать или добавьте заметку — здесь появятся время, ряды и прогресс."
@@ -56,7 +60,7 @@ export default function ProjectStatisticsScreen() {
       : '—';
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="projects">
       <Card style={styles.card}>
         <StatRow label="Всего времени" value={totalLabel} />
         {statistics.activeSessionElapsedSeconds != null ? (

@@ -22,6 +22,7 @@ import {
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { formatMoneyMinor, parsePriceToMinor } from '@/utils/yarnQuantity';
 
 export default function YarnSubstitutionCalculator() {
@@ -35,7 +36,11 @@ export default function YarnSubstitutionCalculator() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateYarnSubstitution>['value']
-  >();
+  >('yarn_substitution');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('yarn_substitution');
+  }, []);
 
   useEffect(() => clear(), [clear, origSkeins, origMeters, replMeters, replWeight, reserve, price]);
 

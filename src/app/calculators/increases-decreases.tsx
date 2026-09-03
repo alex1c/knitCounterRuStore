@@ -12,13 +12,18 @@ import {
 import { FormField } from '@/components/ui/FormField';
 import { distributeIncreasesDecreases } from '@/domain/calculators';
 import { parseRequiredNumber, useCalculatorRunner } from '@/hooks/useCalculatorRunner';
+import { Analytics } from '@/services/AnalyticsService';
 
 export default function IncreasesDecreasesCalculator() {
   const [current, setCurrent] = useState('80');
   const [target, setTarget] = useState('92');
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof distributeIncreasesDecreases>['value']
-  >();
+  >('increases_decreases');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('increases_decreases');
+  }, []);
 
   useEffect(() => clear(), [clear, current, target]);
 

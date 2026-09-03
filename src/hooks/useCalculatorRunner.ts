@@ -5,9 +5,11 @@
 import { useCallback, useState } from 'react';
 
 import { CalculatorValidationError } from '@/domain/calculators/validation';
+import { Analytics } from '@/services/AnalyticsService';
+import { InterstitialAdService } from '@/services/InterstitialAdService';
 import { finalizeNumber } from '@/utils/numeric';
 
-export function useCalculatorRunner<T>() {
+export function useCalculatorRunner<T>(calculatorType?: string) {
   const [result, setResult] = useState<T | null>(null);
   const [explanation, setExplanation] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +20,11 @@ export function useCalculatorRunner<T>() {
       const out = fn();
       setResult(out.value);
       setExplanation(out.explanation);
+      // Monetization/analytics after result is already applied — never delay UI
+      if (calculatorType) {
+        Analytics.calculatorCalculated(calculatorType);
+      }
+      void InterstitialAdService.onSuccessfulCalculation();
     } catch (err) {
       setResult(null);
       setExplanation([]);
@@ -29,7 +36,7 @@ export function useCalculatorRunner<T>() {
         setError('Не удалось рассчитать');
       }
     }
-  }, []);
+  }, [calculatorType]);
 
   const clear = useCallback(() => {
     setResult(null);

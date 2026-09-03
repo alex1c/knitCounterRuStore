@@ -17,6 +17,7 @@ import {
   parseRequiredNumber,
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
+import { Analytics } from '@/services/AnalyticsService';
 
 export default function StitchesWidthCalculator() {
   const [gaugeStitches, setGaugeStitches] = useState('20');
@@ -27,7 +28,11 @@ export default function StitchesWidthCalculator() {
   const [repeatFixed, setRepeatFixed] = useState('0');
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateStitchesForWidth>['value']
-  >();
+  >('stitches_width');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('stitches_width');
+  }, []);
 
   useEffect(() => clear(), [clear, gaugeStitches, gaugeWidth, desiredWidth, edgeStitches, repeatSize, repeatFixed]);
 

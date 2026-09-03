@@ -9,11 +9,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { CALCULATOR_ROUTES } from '@/domain/calculators';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function CalculatorsScreen() {
   return (
-    <Screen scroll>
+    <Screen scroll banner="calculators">
       <Text style={styles.title}>Расчёты</Text>
       <Text style={styles.subtitle}>
         Практичные калькуляторы для плотности, размеров и пряжи.
@@ -23,7 +24,11 @@ export default function CalculatorsScreen() {
           <Pressable
             key={item.id}
             accessibilityRole="button"
-            onPress={() => router.push(item.href)}
+            onPress={() => {
+              // Hub id uses dashes; analytics expects underscores
+              Analytics.calculatorOpened(item.id.replace(/-/g, '_'));
+              router.push(item.href);
+            }}
           >
             <Card style={styles.card}>
               <Text style={styles.cardTitle}>{item.title}</Text>

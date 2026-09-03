@@ -104,7 +104,7 @@ export default function ProjectDiaryScreen() {
   const isEmpty = timeline.length === 0 && !activeBanner;
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} banner="projects">
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.filters}>
           {FILTERS.map((f) => (

@@ -85,7 +85,7 @@ export default function TodayScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <Screen banner="projects">
         <Text style={styles.loading}>Загрузка…</Text>
       </Screen>
     );
@@ -93,7 +93,7 @@ export default function TodayScreen() {
 
   if (activeProjects.length === 0) {
     return (
-      <Screen>
+      <Screen banner="projects">
         <Text style={styles.screenTitle}>Сегодня</Text>
         <EmptyState
           title="Пока нет активного проекта"
@@ -110,7 +110,7 @@ export default function TodayScreen() {
   }
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="projects">
       <Text style={styles.screenTitle}>Сегодня</Text>
       {featuredId ? (
         <ActiveProjectCard

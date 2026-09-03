@@ -34,6 +34,7 @@ import { parseSkeinQuantityInput } from '@/domain/yarnValidation';
 import { useProjectDetail, type ProjectYarnDetail } from '@/hooks/useProjectDetail';
 import { useDatabase } from '@/providers/DatabaseProvider';
 import { formatDuration } from '@/repositories/KnittingSessionRepository';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
 import {
   formatCounterProgress,
@@ -66,7 +67,7 @@ export default function ProjectDetailScreen() {
 
   if (loading || !detail) {
     return (
-      <Screen>
+      <Screen banner="projects">
         <Text style={styles.loading}>Загрузка…</Text>
       </Screen>
     );
@@ -263,6 +264,7 @@ export default function ProjectDetailScreen() {
     if (!projectYarnRepository) return;
     try {
       projectYarnRepository.attachYarn(project.id, yarnId);
+      Analytics.yarnAttachedToProject();
       setAttachVisible(false);
       reload();
     } catch (err) {
@@ -300,6 +302,7 @@ export default function ProjectDetailScreen() {
         try {
           const amount = parseSkeinQuantityInput(text);
           yarnUsageService.recordUsage(link.id, amount);
+          Analytics.yarnUsageRecorded();
           reload();
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Не удалось списать';
@@ -381,7 +384,7 @@ export default function ProjectDetailScreen() {
   };
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="projects">
       <PromptModal
         visible={prompt !== null}
         title={prompt?.title ?? ''}

@@ -18,9 +18,56 @@ import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import type { BackupPreview } from '@/backup/types';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { BackupService } from '@/services/BackupService';
 import { formatDateTimeRu } from '@/utils/numeric';
 import { colors, spacing, typography } from '@/theme/tokens';
+
+/** Maps restore errors to coarse categories — never sends the raw message. */
+function categorizeRestoreFailure(
+  message: string
+): 'invalid_backup' | 'unsupported_version' | 'file_error' | 'database_error' | 'unknown' {
+  const m = message.toLowerCase();
+  if (
+    m.includes('верси') ||
+    m.includes('version') ||
+    m.includes('несовместим') ||
+    m.includes('неподдерживаем')
+  ) {
+    return 'unsupported_version';
+  }
+  if (
+    m.includes('внешн') ||
+    m.includes('foreign') ||
+    m.includes('sqlite') ||
+    m.includes('database')
+  ) {
+    return 'database_error';
+  }
+  if (
+    m.includes('файл') ||
+    m.includes('архив') ||
+    m.includes('file') ||
+    m.includes('zip') ||
+    m.includes('прочитать') ||
+    m.includes('путь') ||
+    m.includes('path')
+  ) {
+    return 'file_error';
+  }
+  if (
+    m.includes('поврежд') ||
+    m.includes('некоррект') ||
+    m.includes('отсутствует') ||
+    m.includes('недопустим') ||
+    m.includes('invalid') ||
+    m.includes('manifest') ||
+    m.includes('data.json')
+  ) {
+    return 'invalid_backup';
+  }
+  return 'unknown';
+}
 
 function PreviewCard({ preview }: { preview: BackupPreview }) {
   return (
@@ -68,6 +115,7 @@ export default function BackupScreen() {
     setPending(null);
     try {
       const result = await service.createBackup();
+      Analytics.backupCreated();
       setStatus(null);
       await service.shareBackup(result.cacheUri);
       service.cleanupTempBackups();
@@ -120,8 +168,10 @@ export default function BackupScreen() {
             void (async () => {
               setBusy('restore');
               setStatus('Восстанавливаем данные…');
+              Analytics.restoreStarted();
               try {
                 const result = service.restoreFromArchive(pending.archiveBytes);
+                Analytics.restoreSucceeded();
                 notifyDataReset();
                 setPending(null);
                 setStatus(null);
@@ -144,6 +194,7 @@ export default function BackupScreen() {
                   err instanceof Error
                     ? err.message
                     : 'Не удалось восстановить';
+                Analytics.restoreFailed(categorizeRestoreFailure(message));
                 setStatus(null);
                 Alert.alert('Ошибка восстановления', message);
               } finally {
@@ -157,7 +208,7 @@ export default function BackupScreen() {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} banner="yarn">
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Резервная копия</Text>
         <Text style={styles.hint}>

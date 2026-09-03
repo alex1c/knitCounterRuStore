@@ -17,6 +17,7 @@ import {
   parseRequiredNumber,
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
+import { Analytics } from '@/services/AnalyticsService';
 
 export default function FinishedSizeCalculator() {
   const [stitches, setStitches] = useState('96');
@@ -27,7 +28,11 @@ export default function FinishedSizeCalculator() {
   const [gaugeHeight, setGaugeHeight] = useState('10');
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateFinishedSize>['value']
-  >();
+  >('finished_size');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('finished_size');
+  }, []);
 
   useEffect(() => clear(), [clear, stitches, rows, gaugeStitches, gaugeRows, gaugeWidth, gaugeHeight]);
 

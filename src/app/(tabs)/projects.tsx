@@ -18,7 +18,7 @@ export default function ProjectsScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <Screen banner="projects">
         <Text style={styles.loading}>Загрузка…</Text>
       </Screen>
     );
@@ -26,7 +26,7 @@ export default function ProjectsScreen() {
 
   if (items.length === 0) {
     return (
-      <Screen>
+      <Screen banner="projects">
         <EmptyState
           title="Пока нет проектов"
           description="Создайте первый проект — счётчик рядов всегда будет под рукой."
@@ -42,7 +42,7 @@ export default function ProjectsScreen() {
   }
 
   return (
-    <Screen contentStyle={styles.screenContent}>
+    <Screen banner="projects" contentStyle={styles.screenContent}>
       <FlatList
         data={items}
         keyExtractor={(item) => item.project.id}

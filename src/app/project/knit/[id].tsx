@@ -20,10 +20,12 @@ import { RowRuleBanner } from '@/components/knitting/RowRuleBanner';
 import { KnittingDocumentPickerModal } from '@/components/knitting/KnittingDocumentPickerModal';
 import type { Counter, KnittingSession, ProjectDocument } from '@/domain/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { KnittingActivityGate } from '@/monetization/KnittingActivityGate';
 import { useDatabase } from '@/providers/DatabaseProvider';
 import {
   formatDuration,
 } from '@/repositories/KnittingSessionRepository';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, spacing, typography } from '@/theme/tokens';
 import {
   formatCounterProgress,
@@ -52,6 +54,8 @@ export default function KnittingScreen() {
   const [activeSession, setActiveSession] = useState<KnittingSession | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [docPickerVisible, setDocPickerVisible] = useState(false);
+  /** Row value at session start — used only for privacy-safe rowsDelta buckets. */
+  const [sessionStartRow, setSessionStartRow] = useState<number | null>(null);
 
   const counters = detail?.counters;
   const parts = detail?.parts;
@@ -99,6 +103,10 @@ export default function KnittingScreen() {
     queueMicrotask(() => {
       setActiveSession(session);
       setElapsed(session ? knittingSessionRepository.getElapsedSeconds(session) : 0);
+      // Sync interstitial gate if a timer was already running
+      if (session?.isActive) {
+        KnittingActivityGate.setActiveTimer(id);
+      }
     });
   }, [id, knittingSessionRepository, detail?.totalKnittingSeconds]);
 
@@ -109,6 +117,13 @@ export default function KnittingScreen() {
     }, 1000);
     return () => clearInterval(tick);
   }, [activeSession, knittingSessionRepository]);
+
+  useEffect(() => {
+    KnittingActivityGate.setOnKnitScreen(true);
+    return () => {
+      KnittingActivityGate.setOnKnitScreen(false);
+    };
+  }, []);
 
   useEffect(() => {
     void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
@@ -177,14 +192,29 @@ export default function KnittingScreen() {
     if (!knittingSessionRepository || !id) return;
     if (activeSession?.isActive) {
       const stopped = knittingSessionRepository.stopSession(activeSession.id);
+      const durationSeconds = stopped.durationSeconds ?? 0;
+      const rowsDelta =
+        sessionStartRow != null && displayCounter != null
+          ? displayCounter.currentValue - sessionStartRow
+          : null;
+      KnittingActivityGate.setActiveTimer(null);
+      Analytics.knittingSessionFinished({
+        durationSeconds,
+        rowsDelta,
+        usedRules: counterRules.length > 0,
+      });
       setActiveSession(null);
-      setElapsed(stopped.durationSeconds ?? 0);
+      setSessionStartRow(null);
+      setElapsed(durationSeconds);
       reload();
     } else {
       const started = knittingSessionRepository.startSession(
         id,
         displayCounter?.projectPartId ?? undefined
       );
+      KnittingActivityGate.setActiveTimer(id);
+      Analytics.knittingSessionStarted();
+      setSessionStartRow(displayCounter?.currentValue ?? null);
       setActiveSession(started);
       setElapsed(0);
     }
@@ -193,6 +223,7 @@ export default function KnittingScreen() {
   const openScheme = () => {
     if (documents.length === 0 || !id) return;
     if (documents.length === 1) {
+      Analytics.documentOpened(documents[0].type);
       router.push(`/project/documents/${documents[0].id}?projectId=${id}`);
       return;
     }
@@ -202,6 +233,7 @@ export default function KnittingScreen() {
   const openDocumentFromPicker = (doc: ProjectDocument) => {
     setDocPickerVisible(false);
     if (!id) return;
+    Analytics.documentOpened(doc.type);
     router.push(`/project/documents/${doc.id}?projectId=${id}`);
   };
 

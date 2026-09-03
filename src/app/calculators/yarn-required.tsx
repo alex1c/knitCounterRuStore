@@ -23,6 +23,7 @@ import {
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { formatMoneyMinor, parsePriceToMinor } from '@/utils/yarnQuantity';
 
 const MODE_OPTIONS = [
@@ -43,7 +44,11 @@ export default function YarnRequiredCalculator() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateYarnRequirement>['value']
-  >();
+  >('yarn_required');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('yarn_required');
+  }, []);
 
   useEffect(() => clear(), [clear, mode, required, weight, length, reserve, price]);
 

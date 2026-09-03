@@ -13,6 +13,7 @@ import { FormField } from '@/components/ui/FormField';
 import { calculateGauge } from '@/domain/calculators';
 import { formatGaugePer10 } from '@/domain/calculators/rounding';
 import { parseRequiredNumber, useCalculatorRunner } from '@/hooks/useCalculatorRunner';
+import { Analytics } from '@/services/AnalyticsService';
 
 export default function GaugeCalculator() {
   const [width, setWidth] = useState('12');
@@ -21,7 +22,11 @@ export default function GaugeCalculator() {
   const [rows, setRows] = useState('33');
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateGauge>['value']
-  >();
+  >('gauge');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('gauge');
+  }, []);
 
   useEffect(() => clear(), [clear, width, height, stitches, rows]);
 

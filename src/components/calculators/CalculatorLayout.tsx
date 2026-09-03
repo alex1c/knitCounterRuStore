@@ -39,7 +39,7 @@ export function CalculatorLayout({
   error,
 }: Props) {
   return (
-    <Screen>
+    <Screen banner="calculators">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}

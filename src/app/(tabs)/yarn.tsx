@@ -31,7 +31,7 @@ export default function YarnScreen() {
 
   if (!loading && items.length === 0 && query.trim() === '') {
     return (
-      <Screen>
+      <Screen banner="yarn">
         <EmptyState
           icon={
             <Ionicons name="ellipse-outline" size={48} color={colors.primaryMuted} />
@@ -50,7 +50,7 @@ export default function YarnScreen() {
   }
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="yarn">
       <Text style={styles.title}>Пряжа</Text>
 
       <TextInput

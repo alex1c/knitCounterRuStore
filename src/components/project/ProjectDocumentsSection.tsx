@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/Card';
 import { PromptModal } from '@/components/ui/PromptModal';
 import type { ProjectDocument } from '@/domain/types';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 type Props = {
@@ -28,6 +29,7 @@ export function ProjectDocumentsSection({ projectId, documents, onChanged }: Pro
 
   const openDocument = useCallback(
     (doc: ProjectDocument) => {
+      Analytics.documentOpened(doc.type);
       router.push(`/project/documents/${doc.id}?projectId=${projectId}`);
     },
     [projectId]
@@ -48,6 +50,7 @@ export function ProjectDocumentsSection({ projectId, documents, onChanged }: Pro
           projectId,
           asset: result.assets[0],
         });
+        Analytics.documentImported(mode);
         onChanged();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Не удалось добавить файл';

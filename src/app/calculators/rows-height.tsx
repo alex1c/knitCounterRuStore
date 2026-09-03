@@ -15,6 +15,7 @@ import {
   parseRequiredNumber,
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
+import { Analytics } from '@/services/AnalyticsService';
 
 export default function RowsHeightCalculator() {
   const [gaugeRows, setGaugeRows] = useState('28');
@@ -23,7 +24,11 @@ export default function RowsHeightCalculator() {
   const [rowRepeat, setRowRepeat] = useState('');
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof calculateRowsForHeight>['value']
-  >();
+  >('rows_height');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('rows_height');
+  }, []);
 
   useEffect(() => clear(), [clear, gaugeRows, gaugeHeight, desiredHeight, rowRepeat]);
 

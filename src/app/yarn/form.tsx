@@ -19,6 +19,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Screen } from '@/components/ui/Screen';
 import { parseSkeinQuantityInput } from '@/domain/yarnValidation';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { finalizeNumber } from '@/utils/numeric';
 import {
@@ -108,6 +109,7 @@ export default function YarnFormScreen() {
         yarnRepository.updateYarn(id, payload);
       } else {
         yarnRepository.createYarn(payload);
+        Analytics.yarnCreated();
       }
       router.back();
     } catch (err) {
@@ -120,7 +122,7 @@ export default function YarnFormScreen() {
   };
 
   return (
-    <Screen>
+    <Screen banner="yarn">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}

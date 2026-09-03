@@ -14,6 +14,8 @@ import {
   type UpdateProjectInput,
 } from '@/repositories/ProjectRepository';
 import { ProjectPartRepository } from '@/repositories/ProjectPartRepository';
+import { Analytics } from '@/services/AnalyticsService';
+import { InterstitialAdService } from '@/services/InterstitialAdService';
 import { ProjectDocumentService } from '@/services/ProjectDocumentService';
 import { nowIsoUtc } from '@/utils/timestamps';
 
@@ -42,7 +44,7 @@ export class ProjectService {
     input: CreateProjectWithDefaultsInput
   ): ProjectWithDefaults {
     try {
-      return this.db.withTransaction(() => {
+      const created = this.db.withTransaction(() => {
         const projects = new ProjectRepository(this.db);
         const parts = new ProjectPartRepository(this.db);
         const counters = new CounterRepository(this.db);
@@ -73,6 +75,10 @@ export class ProjectService {
 
         return { project, defaultPart, primaryCounter };
       });
+      // Privacy-safe: no project name or ids in analytics payload
+      Analytics.projectCreated();
+      void InterstitialAdService.onProjectMilestone();
+      return created;
     } catch (err) {
       if (err instanceof StorageError) throw err;
       throw new StorageError('Failed to create project with defaults', err);
@@ -102,7 +108,13 @@ export class ProjectService {
       patch.completedAt = input.completedAt ?? null;
     }
 
-    return projects.updateProject(id, patch);
+    const updated = projects.updateProject(id, patch);
+    // Detect completed transition so we do not re-fire on unrelated edits
+    if (nextStatus === 'completed' && existing.status !== 'completed') {
+      Analytics.projectCompleted();
+      void InterstitialAdService.onProjectMilestone();
+    }
+    return updated;
   }
 
   /** Bumps updated_at when user interacts with a project (e.g. knitting). */
@@ -130,5 +142,6 @@ export class ProjectService {
     }
 
     projects.deleteProject(id);
+    Analytics.projectDeleted();
   }
 }

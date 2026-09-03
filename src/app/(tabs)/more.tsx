@@ -17,7 +17,7 @@ export default function MoreScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
   return (
-    <Screen scroll>
+    <Screen scroll banner="yarn">
       <Text style={styles.title}>Ещё</Text>
 
       <Card style={styles.card}>

@@ -15,6 +15,8 @@ module.exports = [
       'coverage/*',
       'android/*',
       'ios/*',
+      'jest.setup.js',
+      'plugins/*',
     ],
   },
 ];

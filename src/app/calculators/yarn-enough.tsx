@@ -22,6 +22,7 @@ import {
   useCalculatorRunner,
 } from '@/hooks/useCalculatorRunner';
 import { useDatabase } from '@/providers/DatabaseProvider';
+import { Analytics } from '@/services/AnalyticsService';
 import { formatYarnTitle } from '@/utils/yarnDisplay';
 import { MILLISKEINS_PER_SKEIN } from '@/utils/yarnQuantity';
 import { parseSkeinQuantityInput } from '@/domain/yarnValidation';
@@ -68,7 +69,11 @@ export default function YarnEnoughCalculator() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const { result, explanation, error, run, clear } = useCalculatorRunner<
     ReturnType<typeof checkYarnAvailability>['value']
-  >();
+  >('yarn_enough');
+
+  useEffect(() => {
+    Analytics.calculatorOpened('yarn_enough');
+  }, []);
 
   useEffect(() => clear(), [clear, unit, required, reserve, selectedYarn]);
 
