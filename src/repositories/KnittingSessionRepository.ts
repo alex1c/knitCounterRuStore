@@ -91,6 +91,17 @@ export class KnittingSessionRepository {
     }
   }
 
+  /** True when any project has a running timer. Used by the global ad gate. */
+  hasAnyActiveSession(): boolean {
+    try {
+      return this.db.getFirst(
+        'SELECT 1 FROM knitting_sessions WHERE is_active = 1 LIMIT 1'
+      ) != null;
+    } catch (err) {
+      throw new StorageError('Failed to check active knitting sessions', err);
+    }
+  }
+
   getSessionById(id: string): KnittingSession | null {
     try {
       const row = this.db.getFirst<SessionRow>(

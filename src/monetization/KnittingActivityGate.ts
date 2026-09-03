@@ -5,6 +5,7 @@
 
 let activeTimerProjectId: string | null = null;
 let onKnitScreen = false;
+let hasPersistedActiveTimer: (() => boolean) | null = null;
 
 export const KnittingActivityGate = {
   setOnKnitScreen(value: boolean): void {
@@ -15,9 +16,19 @@ export const KnittingActivityGate = {
     activeTimerProjectId = projectId;
   },
 
+  bindPersistedTimerCheck(check: () => boolean): void {
+    hasPersistedActiveTimer = check;
+  },
+
   /** True when interstitial must not interrupt knitting. */
   isBlocked(): boolean {
-    return activeTimerProjectId != null || onKnitScreen;
+    if (activeTimerProjectId != null || onKnitScreen) return true;
+    try {
+      return hasPersistedActiveTimer?.() ?? false;
+    } catch {
+      // Fail closed: an unreadable session state must not permit an interruption.
+      return true;
+    }
   },
 
   hasActiveTimer(): boolean {

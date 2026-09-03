@@ -12,6 +12,7 @@ import {
 } from '@/monetization/config';
 import { isMonetizationSettingsKey } from '@/monetization/MonetizationSettings';
 import { __testBuckets } from '@/services/AnalyticsService';
+import { KnittingActivityGate } from '@/monetization/KnittingActivityGate';
 
 describe('monetization production IDs', () => {
   it('maps banner placements to production units', () => {
@@ -58,5 +59,25 @@ describe('analytics buckets', () => {
     expect(__testBuckets.rowsBucket(20)).toBe('11_30');
     expect(__testBuckets.rowsBucket(50)).toBe('31_100');
     expect(__testBuckets.rowsBucket(200)).toBe('100_plus');
+  });
+});
+
+describe('active knitting interstitial gate', () => {
+  afterEach(() => {
+    KnittingActivityGate.setOnKnitScreen(false);
+    KnittingActivityGate.setActiveTimer(null);
+    KnittingActivityGate.bindPersistedTimerCheck(() => false);
+  });
+
+  it('blocks from persisted session state even away from knit route', () => {
+    KnittingActivityGate.bindPersistedTimerCheck(() => true);
+    expect(KnittingActivityGate.isBlocked()).toBe(true);
+  });
+
+  it('fails closed when persisted session state cannot be read', () => {
+    KnittingActivityGate.bindPersistedTimerCheck(() => {
+      throw new Error('db unavailable');
+    });
+    expect(KnittingActivityGate.isBlocked()).toBe(true);
   });
 });

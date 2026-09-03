@@ -9,17 +9,23 @@ import {
   incrementAppSessionCount,
 } from '@/monetization/MonetizationSettings';
 import type { SettingsRepository } from '@/repositories/SettingsRepository';
+import type { KnittingSessionRepository } from '@/repositories/KnittingSessionRepository';
+import { KnittingActivityGate } from '@/monetization/KnittingActivityGate';
 
 let bootstrapped = false;
 
 /** Idempotent session/analytics/ads startup for the current process. */
 export async function bootstrapMonetization(
-  settingsRepository: SettingsRepository
+  settingsRepository: SettingsRepository,
+  knittingSessionRepository: KnittingSessionRepository
 ): Promise<void> {
   if (bootstrapped) return;
   bootstrapped = true;
 
   bindMonetizationSettings(settingsRepository);
+  KnittingActivityGate.bindPersistedTimerCheck(() =>
+    knittingSessionRepository.hasAnyActiveSession()
+  );
   initAnalytics();
   Analytics.appOpen();
 

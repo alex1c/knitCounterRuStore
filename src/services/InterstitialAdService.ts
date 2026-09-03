@@ -35,6 +35,8 @@ let loader: InterstitialAdLoader | null = null;
 let readyAd: InterstitialAd | null = null;
 let loading = false;
 let shownThisSession = false;
+/** Reserved synchronously before show() so concurrent triggers cannot double-show. */
+let showInFlight = false;
 /** Successful calculations in this process. */
 let successfulCalculations = 0;
 /**
@@ -88,9 +90,12 @@ export const InterstitialAdService = {
   },
 
   async tryShow(_reason: TriggerReason): Promise<boolean> {
+    if (showInFlight) return false;
     if (!(await InterstitialAdService.isEligible())) {
       return false;
     }
+    // Re-check after async eligibility: another trigger may have reserved the ad.
+    if (showInFlight || shownThisSession) return false;
     if (!readyAd) {
       void InterstitialAdService.preload();
       return false;
@@ -98,12 +103,14 @@ export const InterstitialAdService = {
 
     const ad = readyAd;
     readyAd = null;
+    showInFlight = true;
 
     return await new Promise<boolean>((resolve) => {
       let finished = false;
       const finish = (ok: boolean) => {
         if (finished) return;
         finished = true;
+        showInFlight = false;
         resolve(ok);
       };
 

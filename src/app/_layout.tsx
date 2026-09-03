@@ -92,13 +92,13 @@ export default function RootLayout() {
 
 /** Shows loading or error state while the database initializes. */
 function DatabaseGate({ children }: { children: React.ReactNode }) {
-  const { ready, error, settingsRepository } = useDatabase();
+  const { ready, error, settingsRepository, knittingSessionRepository } = useDatabase();
 
   // Boot analytics/ads once the local DB is ready
   useEffect(() => {
-    if (!ready || !settingsRepository) return;
-    void bootstrapMonetization(settingsRepository);
-  }, [ready, settingsRepository]);
+    if (!ready || !settingsRepository || !knittingSessionRepository) return;
+    void bootstrapMonetization(settingsRepository, knittingSessionRepository);
+  }, [ready, settingsRepository, knittingSessionRepository]);
 
   if (error) {
     return (
