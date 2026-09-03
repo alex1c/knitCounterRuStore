@@ -28,10 +28,12 @@ export const ARCHIVE_PROJECTS_PREFIX = 'files/projects/';
  * Safety bounds against pathological archives (ZIP bombs / huge payloads).
  * Sized for knitting-app usage (docs + DB JSON), not enterprise media vaults.
  */
-export const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024; // 200 MB compressed
-export const MAX_UNCOMPRESSED_BYTES = 400 * 1024 * 1024; // 400 MB total uncompressed
+// fflate is synchronous and in-memory; keep enough headroom for the ZIP input,
+// inflated output and JS/native copies on typical Android devices.
+export const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024; // 32 MB compressed
+export const MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024; // 64 MB total uncompressed
 export const MAX_ZIP_ENTRIES = 5_000;
-export const MAX_SINGLE_ENTRY_BYTES = 80 * 1024 * 1024; // 80 MB per file
+export const MAX_SINGLE_ENTRY_BYTES = 32 * 1024 * 1024; // 32 MB per file
 
 /** Tables exported / restored in FK-safe dependency order (insert order). */
 export const BACKUP_TABLE_ORDER = [

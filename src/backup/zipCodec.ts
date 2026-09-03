@@ -54,6 +54,9 @@ export function unpackZip(archiveBytes: Uint8Array): ZipFileMap {
   }
 
   let unzipped: ZipFileMap;
+  const seen = new Set<string>();
+  let entryCount = 0;
+  let declaredUncompressed = 0;
   try {
     unzipped = unzipSync(archiveBytes, {
       filter: (file) => {
@@ -62,7 +65,25 @@ export function unpackZip(archiveBytes: Uint8Array): ZipFileMap {
           return false;
         }
         const safe = sanitizeZipEntryPath(file.name);
-        return safe != null && isAllowedBackupEntryPath(safe);
+        if (!safe || !isAllowedBackupEntryPath(safe)) {
+          throw new Error(`Небезопасный путь в архиве: ${file.name}`);
+        }
+        if (seen.has(safe)) {
+          throw new Error(`Дублирующийся путь в архиве: ${safe}`);
+        }
+        seen.add(safe);
+        entryCount += 1;
+        if (entryCount > MAX_ZIP_ENTRIES) {
+          throw new Error('Слишком много файлов в архиве');
+        }
+        if (file.originalSize > MAX_SINGLE_ENTRY_BYTES) {
+          throw new Error(`Файл слишком большой: ${safe}`);
+        }
+        declaredUncompressed += file.originalSize;
+        if (declaredUncompressed > MAX_UNCOMPRESSED_BYTES) {
+          throw new Error('Распакованный архив слишком большой');
+        }
+        return true;
       },
     });
   } catch (err) {

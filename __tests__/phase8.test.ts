@@ -3,6 +3,7 @@
  */
 
 import initSqlJs from 'sql.js';
+import { zipSync } from 'fflate';
 
 import { createDatabaseFromClient } from '@/db/database';
 import { CURRENT_SCHEMA_VERSION } from '@/db/migrations';
@@ -24,6 +25,7 @@ import {
 import {
   buildPreview,
   validateBackupData,
+  validateBackupConsistency,
   validateManifest,
 } from '@/backup/validateBackup';
 import {
@@ -46,6 +48,7 @@ import { YarnRepository } from '@/repositories/YarnRepository';
 import { ProjectService } from '@/services/ProjectService';
 import { RowRuleRepository } from '@/repositories/RowRuleRepository';
 import { SettingsRepository } from '@/repositories/SettingsRepository';
+import { restoreAtomically } from '@/backup/restoreCoordinator';
 
 async function openTestDb(): Promise<SqlDatabase> {
   const SQL = await initSqlJs();
@@ -165,7 +168,10 @@ describe('backup round-trip', () => {
 
     // Start an active session — must be closed in snapshot
     const sessions = new KnittingSessionRepository(source);
-    sessions.startSession(project.id);
+    const activeSession = sessions.startSession(project.id);
+    source.run('UPDATE knitting_sessions SET started_at = ? WHERE id = ?', [
+      '2026-09-02T11:30:00.000Z', activeSession.id,
+    ]);
 
     const pdfBytes = new TextEncoder().encode('%PDF-1.4 backup-test');
     const built = buildBackupPayload(source, {
@@ -247,6 +253,16 @@ describe('backup round-trip', () => {
 });
 
 describe('corrupt backup rejection', () => {
+  test('manifest table count mismatch is rejected', async () => {
+    const db = await openTestDb();
+    seedDataset(db);
+    const built = buildBackupPayload(db, {
+      createdAt: '2026-09-02T12:00:00.000Z', appVersion: '1.0.0',
+      fileReader: { readManagedFile: () => null, extensionForDocument: () => 'pdf' },
+    });
+    built.manifest.tables.knitting_projects += 1;
+    expect(() => validateBackupConsistency(built.manifest, built.data, [MANIFEST_ENTRY, DATA_ENTRY])).toThrow(/Количество записей/);
+  });
   test('invalid JSON', () => {
     expect(() =>
       unpackZip(packZip({ [MANIFEST_ENTRY]: new Uint8Array([1, 2, 3]) }))
@@ -351,5 +367,55 @@ describe('Cyrillic round-trip encoding', () => {
     const { data } = readManifestAndData(unpackZip(packed));
     expect(data.tables.knitting_projects[0].name).toBe('Резервная шапка');
     expect(data.tables.project_diary_entries[0].text).toContain('рядов');
+  });
+});
+
+describe('restore filesystem/database atomicity', () => {
+  test('file materialization failure preserves old database and old files', async () => {
+    const oldDb = await openTestDb();
+    const old = seedDataset(oldDb);
+    const source = await openTestDb();
+    seedDataset(source);
+    const built = buildBackupPayload(source, {
+      createdAt: '2026-09-02T12:00:00.000Z', appVersion: '1.0.0',
+      fileReader: { readManagedFile: () => new Uint8Array([1]), extensionForDocument: () => 'pdf' },
+    });
+    const oldUri = oldDb.getFirst<{ file_uri: string }>('SELECT file_uri FROM project_documents')!.file_uri;
+    const removed: string[] = [];
+    expect(() => restoreAtomically(oldDb, built.data, [
+      { documentId: String(built.data.tables.project_documents[0].id), projectId: String(built.data.tables.project_documents[0].project_id), extension: 'pdf', bytes: new Uint8Array([1]) },
+      { documentId: 'second-doc-id', projectId: old.project.id, extension: 'pdf', bytes: new Uint8Array([2]) },
+    ], {
+      materialize: (file) => { if (file.documentId === 'second-doc-id') throw new Error('disk full'); return `file:///new/${file.documentId}.pdf`; },
+      remove: (uri) => { removed.push(uri); },
+    }, 'generation')).toThrow('disk full');
+    expect(oldDb.getFirst('SELECT id FROM knitting_projects WHERE id = ?', [old.project.id])).not.toBeNull();
+    expect(oldDb.getFirst<{ file_uri: string }>('SELECT file_uri FROM project_documents')!.file_uri).toBe(oldUri);
+    expect(removed).toEqual([expect.stringContaining('file:///new/')]);
+  });
+
+  test('database failure removes new generation and preserves same-id old URI', async () => {
+    const db = await openTestDb();
+    seedDataset(db);
+    const oldUri = db.getFirst<{ file_uri: string }>('SELECT file_uri FROM project_documents')!.file_uri;
+    const built = buildBackupPayload(db, {
+      createdAt: '2026-09-02T12:00:00.000Z', appVersion: '1.0.0',
+      fileReader: { readManagedFile: () => new Uint8Array([1]), extensionForDocument: () => 'pdf' },
+    });
+    built.data.tables.knitting_projects[0].name = null;
+    const doc = built.data.tables.project_documents[0];
+    const newUri = `file:///managed/${doc.id}-restore-generation.pdf`;
+    const removed: string[] = [];
+    expect(() => restoreAtomically(db, built.data, [{ documentId: String(doc.id), projectId: String(doc.project_id), extension: 'pdf', bytes: new Uint8Array([1]) }], {
+      materialize: () => newUri,
+      remove: (uri) => { removed.push(uri); },
+    }, 'generation')).toThrow();
+    expect(db.getFirst<{ file_uri: string }>('SELECT file_uri FROM project_documents')!.file_uri).toBe(oldUri);
+    expect(removed).toContain(newUri);
+    expect(removed).not.toContain(oldUri);
+  });
+
+  test('unpack rejects unsafe entries instead of silently discarding them', () => {
+    expect(() => unpackZip(zipSync({ '../../evil': new Uint8Array([1]) }))).toThrow(/Небезопасный/);
   });
 });

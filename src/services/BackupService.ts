@@ -25,9 +25,8 @@ import {
 } from '@/backup/constants';
 import { buildBackupPayload } from '@/backup/buildBackupPayload';
 import {
-  applyBackupToDatabase,
-  sanitizeSettingsAfterRestore,
-} from '@/backup/applyBackup';
+  restoreAtomically,
+} from '@/backup/restoreCoordinator';
 import {
   jsonToBytes,
   packZip,
@@ -37,6 +36,7 @@ import {
 } from '@/backup/zipCodec';
 import {
   buildPreview,
+  validateBackupConsistency,
   validateBackupData,
   validateManifest,
 } from '@/backup/validateBackup';
@@ -46,9 +46,8 @@ import type {
   BackupRestoreResult,
 } from '@/backup/types';
 import {
-  copyToManagedStorage,
-  deleteManagedProjectDirectory,
-  getManagedDocumentsRootUri,
+  materializeRestoreFile,
+  deleteManagedDocumentFile,
   managedFileExists,
 } from '@/storage/DocumentFileStorage';
 import { managedDocumentFileName } from '@/utils/managedDocumentPaths';
@@ -211,6 +210,7 @@ export class BackupService {
     const { manifest: rawManifest, data: rawData } = readManifestAndData(files);
     const manifest = validateManifest(rawManifest);
     const data = validateBackupData(rawData);
+    validateBackupConsistency(manifest, data, Object.keys(files));
 
     // Ensure archived document bytes are present when not marked missing
     for (const doc of data.documents) {
@@ -235,6 +235,7 @@ export class BackupService {
     const { manifest: rawManifest, data: rawData } = readManifestAndData(files);
     const manifest = validateManifest(rawManifest);
     const data = validateBackupData(rawData);
+    validateBackupConsistency(manifest, data, Object.keys(files));
 
     // Stage document bytes keyed by document id
     const staged = new Map<
@@ -261,65 +262,26 @@ export class BackupService {
       });
     }
 
-    // Snapshot current project ids for post-restore cleanup
-    const previousProjectIds = this.db
-      .getAll<{ id: string }>('SELECT id FROM knitting_projects')
-      .map((r) => r.id);
-
-    // Rewrite document file_uri placeholders before insert
-    for (const row of data.tables.project_documents) {
-      const id = String(row.id);
-      const projectId = String(row.project_id);
-      const stagedFile = staged.get(id);
-      if (!stagedFile) {
-        // Missing file — keep empty URI so viewer shows "Файл не найден"
-        row.file_uri = '';
-        continue;
-      }
-      // Temporary placeholder; real URI written after materialization
-      row.file_uri = `pending://${projectId}/${id}`;
-    }
-
-    applyBackupToDatabase(this.db, data);
-
     const warnings = [...manifest.warnings];
-    const newProjectIds = new Set(
-      data.tables.knitting_projects.map((p) => String(p.id))
-    );
-
-    // Materialize files into managed storage and rewrite URIs
+    const generation = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
-      for (const [documentId, stagedFile] of staged) {
-        const tempDir = new Directory(Paths.cache, 'restore-staging', documentId);
-        if (tempDir.exists) {
-          tempDir.delete();
-        }
-        tempDir.create({ intermediates: true });
-        const tempFile = new File(
-          tempDir,
-          managedDocumentFileName(documentId, stagedFile.extension)
-        );
-        tempFile.create();
-        tempFile.write(stagedFile.bytes);
-
-        const managedUri = copyToManagedStorage({
-          projectId: stagedFile.projectId,
-          documentId,
-          sourceUri: tempFile.uri,
-          extension: stagedFile.extension,
-        });
-
-        this.db.run(
-          'UPDATE project_documents SET file_uri = ? WHERE id = ?',
-          [managedUri, documentId]
-        );
-
-        try {
-          tempDir.delete();
-        } catch {
-          // ignore temp cleanup
-        }
-      }
+      restoreAtomically(
+        this.db,
+        data,
+        [...staged].map(([documentId, file]) => ({ documentId, ...file })),
+        {
+          materialize: (file, token) => {
+            const tempDir = new Directory(Paths.cache, 'restore-staging', token, file.documentId);
+            tempDir.create({ intermediates: true, idempotent: true });
+            const tempFile = new File(tempDir, managedDocumentFileName(file.documentId, file.extension));
+            tempFile.create({ overwrite: true });
+            tempFile.write(file.bytes);
+            return materializeRestoreFile({ ...file, sourceUri: tempFile.uri, generation: token });
+          },
+          remove: (uri, projectId) => { deleteManagedDocumentFile(uri, projectId); },
+        },
+        generation
+      );
     } catch (err) {
       warnings.push(
         err instanceof Error
@@ -327,32 +289,15 @@ export class BackupService {
           : 'Ошибка записи файлов'
       );
       throw err;
-    }
-
-    sanitizeSettingsAfterRestore(this.db);
-
-    // Best-effort remove obsolete managed project directories not in restore set
-    for (const oldId of previousProjectIds) {
-      if (!newProjectIds.has(oldId)) {
-        try {
-          deleteManagedProjectDirectory(oldId);
-        } catch {
-          // ignore
-        }
+    } finally {
+      // Clear only this operation's staging generation.
+      try {
+        const staging = new Directory(Paths.cache, 'restore-staging', generation);
+        if (staging.exists) staging.delete();
+      } catch {
+        // ignore
       }
     }
-
-    // Clear staging root
-    try {
-      const staging = new Directory(Paths.cache, 'restore-staging');
-      if (staging.exists) {
-        staging.delete();
-      }
-    } catch {
-      // ignore
-    }
-
-    void getManagedDocumentsRootUri;
 
     return {
       preview: buildPreview(manifest, data),

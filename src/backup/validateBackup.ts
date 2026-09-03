@@ -289,9 +289,16 @@ export function validateBackupData(raw: unknown): BackupDataPayload {
     if (!projectIds.has(projectId)) {
       throw new Error('Сессия ссылается на неизвестный проект');
     }
-    assertIso(row.started_at, 'session.started_at');
-    if (row.ended_at != null) assertIso(row.ended_at, 'session.ended_at');
-    assertNullableNonNegInt(row.duration_seconds, 'duration_seconds');
+    const startedAt = assertIso(row.started_at, 'session.started_at');
+    if (row.ended_at == null) {
+      throw new Error('Завершённая сессия должна иметь ended_at');
+    }
+    const endedAt = assertIso(row.ended_at, 'session.ended_at');
+    const duration = assertNullableNonNegInt(row.duration_seconds, 'duration_seconds');
+    const elapsed = Math.floor((Date.parse(endedAt) - Date.parse(startedAt)) / 1000);
+    if (elapsed < 0 || duration == null || duration !== elapsed) {
+      throw new Error('Противоречивые временные данные завершённой сессии');
+    }
     assertBool01(row.is_active, 'session.is_active');
     if (row.is_active === 1) {
       throw new Error(
@@ -364,12 +371,17 @@ export function validateBackupData(raw: unknown): BackupDataPayload {
   }
 
   const documents: BackupDocumentRecord[] = [];
+  const metadataIds = new Set<string>();
   for (const rawDoc of payload.documents as unknown[]) {
     if (!rawDoc || typeof rawDoc !== 'object') {
       throw new Error('Некорректная запись документа в documents[]');
     }
     const d = rawDoc as Record<string, unknown>;
     const id = assertId(d.id, 'documents.id');
+    if (metadataIds.has(id)) {
+      throw new Error(`Дублирующийся идентификатор в documents: ${id}`);
+    }
+    metadataIds.add(id);
     if (!documentIds.has(id)) {
       throw new Error(`documents[] ссылается на неизвестный документ: ${id}`);
     }
@@ -393,6 +405,11 @@ export function validateBackupData(raw: unknown): BackupDataPayload {
       if (!d.archive_path.startsWith(`files/projects/${projectId}/documents/`)) {
         throw new Error('documents[]: archive_path не совпадает с project_id');
       }
+      const extension = d.archive_path.slice(d.archive_path.lastIndexOf('.') + 1).toLowerCase();
+      const allowed = d.type === 'pdf' ? ['pdf'] : ['jpg', 'jpeg', 'png', 'webp'];
+      if (!allowed.includes(extension)) {
+        throw new Error(`documents[]: недопустимое расширение .${extension}`);
+      }
       archivePath = d.archive_path;
     }
     documents.push({
@@ -404,6 +421,10 @@ export function validateBackupData(raw: unknown): BackupDataPayload {
       archive_path: archivePath,
       file_missing: fileMissing,
     });
+  }
+
+  if (metadataIds.size !== documentIds.size) {
+    throw new Error('documents[] не соответствует таблице project_documents');
   }
 
   return { tables, documents };
@@ -427,4 +448,28 @@ export function buildPreview(
     filesMissing: data.documents.filter((d) => d.file_missing).length,
     warnings: manifest.warnings,
   };
+}
+
+/** Cross-checks manifest counts and archive document entries deterministically. */
+export function validateBackupConsistency(
+  manifest: BackupManifest,
+  data: BackupDataPayload,
+  archivePaths: string[]
+): void {
+  for (const name of BACKUP_TABLE_ORDER) {
+    if (!Number.isSafeInteger(manifest.tables[name]) || manifest.tables[name] !== data.tables[name].length) {
+      throw new Error(`Количество записей ${name} не совпадает с manifest.json`);
+    }
+  }
+  const expected = new Set(
+    data.documents.flatMap((doc) => doc.file_missing || !doc.archive_path ? [] : [doc.archive_path])
+  );
+  const actual = archivePaths.filter((path) => path.startsWith('files/'));
+  if (manifest.files !== expected.size || actual.length !== expected.size || actual.some((path) => !expected.has(path))) {
+    throw new Error('Список файлов не совпадает с manifest.json/data.json');
+  }
+  const missing = data.documents.filter((doc) => doc.file_missing).length;
+  if (manifest.files_missing !== missing) {
+    throw new Error('Количество отсутствующих файлов не совпадает с manifest.json');
+  }
 }

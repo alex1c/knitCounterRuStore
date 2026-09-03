@@ -56,9 +56,10 @@ function insertRows(
  */
 export function applyBackupToDatabase(
   db: SqlDatabase,
-  data: BackupDataPayload
+  data: BackupDataPayload,
+  manageTransaction = true
 ): void {
-  db.withTransaction(() => {
+  const apply = () => {
     for (const table of DELETE_ORDER) {
       db.run(`DELETE FROM ${table}`);
     }
@@ -71,7 +72,9 @@ export function applyBackupToDatabase(
     if (fkViolations.length > 0) {
       throw new Error('Нарушение внешних ключей при восстановлении');
     }
-  });
+  };
+  if (manageTransaction) db.withTransaction(apply);
+  else apply();
 }
 
 /** Clears dangling active_project / similar settings after restore. */

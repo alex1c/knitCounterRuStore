@@ -3,7 +3,7 @@
  */
 
 const ISO_TIMESTAMP_REGEX =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 
 /** Returns the current instant as an ISO-8601 UTC string. */
 export function nowIsoUtc(): string {
@@ -16,7 +16,19 @@ export function assertIsoTimestamp(value: string): void {
     throw new Error(`Expected non-empty ISO timestamp string, got: ${String(value)}`);
   }
 
-  if (!ISO_TIMESTAMP_REGEX.test(value) || Number.isNaN(Date.parse(value))) {
+  const match = ISO_TIMESTAMP_REGEX.exec(value);
+  if (!match || Number.isNaN(Date.parse(value))) {
+    throw new Error(`Invalid ISO-8601 timestamp: ${value}`);
+  }
+
+  const [, year, month, day, hour, minute, second, offsetSign, offsetHour, offsetMinute] = match;
+  const local = new Date(Date.UTC(+year, +month - 1, +day, +hour, +minute, +second));
+  if (
+    local.getUTCFullYear() !== +year || local.getUTCMonth() !== +month - 1 ||
+    local.getUTCDate() !== +day || local.getUTCHours() !== +hour ||
+    local.getUTCMinutes() !== +minute || local.getUTCSeconds() !== +second ||
+    (offsetSign != null && (+offsetHour > 14 || +offsetMinute > 59 || (+offsetHour === 14 && +offsetMinute !== 0)))
+  ) {
     throw new Error(`Invalid ISO-8601 timestamp: ${value}`);
   }
 

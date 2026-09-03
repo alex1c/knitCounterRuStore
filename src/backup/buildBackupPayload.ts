@@ -48,9 +48,10 @@ export function snapshotSessionsForBackup(
     }
     const startedAt = String(row.started_at);
     const startedMs = Date.parse(startedAt);
-    const duration = Number.isNaN(startedMs) || Number.isNaN(snapshotMs)
-      ? 0
-      : Math.max(0, Math.floor((snapshotMs - startedMs) / 1000));
+    if (Number.isNaN(startedMs) || Number.isNaN(snapshotMs) || startedMs > snapshotMs) {
+      throw new Error('Активная сессия начинается после времени резервной копии');
+    }
+    const duration = Math.floor((snapshotMs - startedMs) / 1000);
     return {
       ...row,
       ended_at: snapshotTime,
@@ -76,14 +77,17 @@ export function buildBackupPayload(
   const warnings: string[] = [];
   const tables = {} as BackupDataPayload['tables'];
 
-  for (const name of BACKUP_TABLE_ORDER) {
-    tables[name] = dumpTable(db, name);
-  }
-
-  tables.knitting_sessions = snapshotSessionsForBackup(
-    tables.knitting_sessions,
-    options.createdAt
-  );
+  // SQLite read transaction gives every table the same point-in-time snapshot.
+  // File reads happen afterwards; imported managed documents are immutable.
+  db.withTransaction(() => {
+    for (const name of BACKUP_TABLE_ORDER) {
+      tables[name] = dumpTable(db, name);
+    }
+    tables.knitting_sessions = snapshotSessionsForBackup(
+      tables.knitting_sessions,
+      options.createdAt
+    );
+  });
 
   const fileBytes: Record<string, Uint8Array> = {};
   const documents: BackupDocumentRecord[] = [];

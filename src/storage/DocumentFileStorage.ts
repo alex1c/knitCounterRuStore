@@ -51,6 +51,22 @@ export function copyToManagedStorage(params: CopyToManagedParams): string {
   return destination.uri;
 }
 
+/** Writes a restore generation without colliding with the currently live file. */
+export function materializeRestoreFile(
+  params: CopyToManagedParams & { generation: string }
+): string {
+  const dir = ensureProjectDocumentsDirectory(params.projectId);
+  const base = managedDocumentFileName(params.documentId, params.extension);
+  const dot = base.lastIndexOf('.');
+  const fileName = `${base.slice(0, dot)}-restore-${params.generation}${base.slice(dot)}`;
+  const destination = new File(dir, fileName);
+  if (destination.exists) destination.delete();
+  const source = new File(params.sourceUri);
+  if (!source.exists) throw new Error('Исходный файл недоступен');
+  source.copy(destination);
+  return destination.uri;
+}
+
 /** Deletes a managed document file when URI is verified safe. */
 export function deleteManagedDocumentFile(
   fileUri: string,
