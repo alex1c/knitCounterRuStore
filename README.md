@@ -1,4 +1,4 @@
-# Моя вязалка
+# Вязальня
 
 Offline-first knitting assistant for Russian-speaking users.
 

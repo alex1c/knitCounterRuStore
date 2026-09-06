@@ -86,7 +86,8 @@ export function backupFileName(createdAt: string): string {
   const d = new Date(createdAt);
   const pad = (n: number) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  return `Moya-vyazalka-backup-${stamp}.${BACKUP_FILE_EXTENSION}`;
+  // Display name for NEW archives only — restore ignores the filename.
+  return `Vyazalnya-backup-${stamp}.${BACKUP_FILE_EXTENSION}`;
 }
 
 export function writeBackupBytes(

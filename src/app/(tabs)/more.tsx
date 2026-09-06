@@ -43,7 +43,7 @@ export default function MoreScreen() {
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>О приложении</Text>
-        <Text style={styles.cardHint}>Моя вязалка · версия {version}</Text>
+        <Text style={styles.cardHint}>Вязальня · версия {version}</Text>
       </Card>
     </Screen>
   );

@@ -1,7 +1,7 @@
-# Моя вязалка — Product Scope (v1)
+# Вязальня — Product Scope (v1)
 
 **Phase:** 0 — Product / Domain Foundation  
-**App name:** Моя вязалка  
+**App name:** Вязальня  
 **Package:** `com.calculatorplatform.knitcounter`
 
 ## Product Goal

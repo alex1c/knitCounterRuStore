@@ -54,7 +54,7 @@ import { backupFileName, writeBackupBytes } from '@/services/BackupService';
 describe('backup save flow helpers', () => {
   it('keeps the knitbackup extension in generated filenames', () => {
     expect(backupFileName('2026-09-06T11:15:00.000')).toBe(
-      'Moya-vyazalka-backup-2026-09-06-1115.knitbackup'
+      'Vyazalnya-backup-2026-09-06-1115.knitbackup'
     );
   });
 
