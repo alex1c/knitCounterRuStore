@@ -49,6 +49,33 @@ import { ProjectService } from '@/services/ProjectService';
 import { RowRuleRepository } from '@/repositories/RowRuleRepository';
 import { SettingsRepository } from '@/repositories/SettingsRepository';
 import { restoreAtomically } from '@/backup/restoreCoordinator';
+import { backupFileName, writeBackupBytes } from '@/services/BackupService';
+
+describe('backup save flow helpers', () => {
+  it('keeps the knitbackup extension in generated filenames', () => {
+    expect(backupFileName('2026-09-06T11:15:00.000')).toBe(
+      'Moya-vyazalka-backup-2026-09-06-1115.knitbackup'
+    );
+  });
+
+  it('writes the exact archive bytes to the selected destination', () => {
+    const source = new Uint8Array([0, 1, 2, 255]);
+    let written: Uint8Array | undefined;
+    const uri = writeBackupBytes(
+      {
+        uri: 'content://com.android.providers.downloads.documents/document/42',
+        write: (bytes) => {
+          written = bytes;
+        },
+      },
+      source
+    );
+
+    expect(uri).toContain('content://');
+    expect(written).toBe(source);
+    expect(Array.from(written ?? [])).toEqual(Array.from(source));
+  });
+});
 
 async function openTestDb(): Promise<SqlDatabase> {
   const SQL = await initSqlJs();

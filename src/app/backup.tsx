@@ -117,13 +117,13 @@ export default function BackupScreen() {
       const result = await service.createBackup();
       Analytics.backupCreated();
       setStatus(null);
-      await service.shareBackup(result.cacheUri);
+      await service.saveBackup(result.archiveBytes, result.fileName);
       service.cleanupTempBackups();
       Alert.alert(
         'Готово',
         result.manifest.files_missing > 0
-          ? `Копия создана. Некоторые файлы документов отсутствовали (${result.manifest.files_missing}).`
-          : 'Резервная копия создана.'
+          ? `Копия сохранена: ${result.fileName}. Некоторые файлы документов отсутствовали (${result.manifest.files_missing}).`
+          : `Резервная копия сохранена: ${result.fileName}.`
       );
     } catch (err) {
       const message =

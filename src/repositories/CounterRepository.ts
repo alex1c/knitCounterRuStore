@@ -292,7 +292,9 @@ export class CounterRepository {
   listEventsByCounter(counterId: string): CounterEvent[] {
     try {
       const rows = this.db.getAll<CounterEventRow>(
-        'SELECT * FROM counter_events WHERE counter_id = ? ORDER BY created_at DESC',
+        // Multiple mutations can share the same ISO timestamp. SQLite's rowid
+        // preserves insertion order and makes "latest" deterministic in that case.
+        'SELECT * FROM counter_events WHERE counter_id = ? ORDER BY created_at DESC, rowid DESC',
         [counterId]
       );
       return rows.map(mapCounterEvent);

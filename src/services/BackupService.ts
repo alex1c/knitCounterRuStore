@@ -82,11 +82,19 @@ function extensionFromRow(row: Record<string, unknown>): string {
   return 'bin';
 }
 
-function backupFileName(createdAt: string): string {
+export function backupFileName(createdAt: string): string {
   const d = new Date(createdAt);
   const pad = (n: number) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
   return `Moya-vyazalka-backup-${stamp}.${BACKUP_FILE_EXTENSION}`;
+}
+
+export function writeBackupBytes(
+  destination: { uri: string; write: (bytes: Uint8Array) => void },
+  archiveBytes: Uint8Array
+): string {
+  destination.write(archiveBytes);
+  return destination.uri;
 }
 
 function ensureBackupCacheDir(): Directory {
@@ -142,6 +150,20 @@ export class BackupService {
       preview: buildPreview(built.manifest, built.data),
       cacheUri: outFile.uri,
     };
+  }
+
+  /**
+   * Persists the in-memory archive in a user-selected Android directory.
+   * The SAF destination owns the resulting file; the cache URI is only a
+   * temporary source for the optional sharing flow.
+   */
+  async saveBackup(archiveBytes: Uint8Array, fileName: string): Promise<string> {
+    const directory = await Directory.pickDirectoryAsync();
+    // SAF may append ".zip" when the MIME is application/zip. Keep the
+    // user-facing .knitbackup filename exact while restore validation still
+    // enforces the backup extension and archive contents.
+    const destination = directory.createFile(fileName, 'application/octet-stream');
+    return writeBackupBytes(destination, archiveBytes);
   }
 
   /** Shares a previously created cache archive via the system sheet. */
