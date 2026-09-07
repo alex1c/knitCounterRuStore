@@ -34,7 +34,8 @@
       "expo-sqlite",
       "@config-plugins/react-native-pdf",
       "@config-plugins/react-native-blob-util",
-      "./plugins/withRemoveSystemAlertWindow.js"
+      "./plugins/withRemoveSystemAlertWindow.js",
+      "./plugins/withVyazalnyaReleaseSigning.js"
     ],
     "experiments": {
       "typedRoutes": true
