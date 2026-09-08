@@ -113,20 +113,38 @@ function applyReleaseSigning(buildGradle) {
     (match) => `${match}\n${releaseSigningBlock}`
   );
 
-  // Force release buildType to use signingConfigs.release (not debug)
-  if (/buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+[^\n]+/.test(updated)) {
+  // Force ONLY buildTypes.release to use signingConfigs.release.
+  // Important: do not match signingConfigs { release { ... } } — that block
+  // appears earlier and would otherwise rewrite debug's signingConfig.
+  if (
+    /buildTypes\s*\{[\s\S]*?\brelease\s*\{[\s\S]*?signingConfig\s+[^\n]+/.test(
+      updated
+    )
+  ) {
     updated = updated.replace(
-      /(release\s*\{[\s\S]*?)signingConfig\s+[^\n]+/,
+      /(buildTypes\s*\{[\s\S]*?\brelease\s*\{[\s\S]*?)signingConfig\s+[^\n]+/,
       `$1signingConfig signingConfigs.release`
     );
-  } else if (/release\s*\{/.test(updated)) {
+  } else if (/buildTypes\s*\{[\s\S]*?\brelease\s*\{/.test(updated)) {
     updated = updated.replace(
-      /release\s*\{/,
-      `release {\n            signingConfig signingConfigs.release`
+      /(buildTypes\s*\{[\s\S]*?\brelease\s*\{)/,
+      `$1\n            signingConfig signingConfigs.release`
     );
   } else {
     throw new Error(
       'withVyazalnyaReleaseSigning: release buildType not found in app/build.gradle'
+    );
+  }
+
+  // Keep debug builds on the local debug keystore (never swap them to release).
+  if (
+    /buildTypes\s*\{[\s\S]*?\bdebug\s*\{[\s\S]*?signingConfig\s+[^\n]+/.test(
+      updated
+    )
+  ) {
+    updated = updated.replace(
+      /(buildTypes\s*\{[\s\S]*?\bdebug\s*\{[\s\S]*?)signingConfig\s+[^\n]+/,
+      `$1signingConfig signingConfigs.debug`
     );
   }
 
