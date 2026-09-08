@@ -1,10 +1,10 @@
 /**
- * Ещё — settings entry points (backup) and app information.
+ * Ещё — user guide, backup entry points, and app information.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -19,6 +19,27 @@ export default function MoreScreen() {
   return (
     <Screen scroll banner="yarn">
       <Text style={styles.title}>Ещё</Text>
+
+      <Card style={styles.card}>
+        <View style={styles.row}>
+          <Ionicons
+            name="book-outline"
+            size={24}
+            color={colors.primary}
+          />
+          <View style={styles.rowText}>
+            <Text style={styles.cardTitle}>Как пользоваться Вязальней</Text>
+            <Text style={styles.cardHint}>
+              Подробное руководство по проектам, рядам, пряже, схемам и расчётам
+            </Text>
+          </View>
+        </View>
+        <Button
+          title="Открыть"
+          variant="secondary"
+          onPress={() => router.push('/guide' as Href)}
+        />
+      </Card>
 
       <Card style={styles.card}>
         <View style={styles.row}>

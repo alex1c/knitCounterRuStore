@@ -80,6 +80,10 @@ export default function RootLayout() {
               options={{ title: 'Резервная копия' }}
             />
             <Stack.Screen
+              name="guide"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="calculators"
               options={{ headerShown: false }}
             />
